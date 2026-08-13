@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer components {
+  .toolbar-btn {
+    @apply px-2.5 py-1 text-xs rounded border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+}
