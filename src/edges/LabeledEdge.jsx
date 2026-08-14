@@ -1,25 +1,40 @@
 import { useState, useRef, useEffect } from 'react'
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, useReactFlow } from '@xyflow/react'
+import {
+  BaseEdge,
+  EdgeLabelRenderer,
+  getStraightPath,
+  getSmoothStepPath,
+  useInternalNode,
+  useReactFlow,
+} from '@xyflow/react'
 import { useFlowStore } from '../store/useFlowStore'
+import { getEdgeParams } from '../utils/edgeGeometry'
+import { DEFAULT_STROKE_WIDTH } from './strokeWidthPresets'
+import EdgeContextMenu from './EdgeContextMenu'
+
+const ALIGN_TOLERANCE = 2
 
 export default function LabeledEdge({
   id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
+  source,
+  target,
   data,
+  markerStart,
   markerEnd,
   selected,
 }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(data?.label ?? '')
+  const [menuPos, setMenuPos] = useState(null)
   const inputRef = useRef(null)
   const updateEdgeLabel = useFlowStore((s) => s.updateEdgeLabel)
+  const updateEdgeArrowStyle = useFlowStore((s) => s.updateEdgeArrowStyle)
+  const updateEdgeStrokeWidth = useFlowStore((s) => s.updateEdgeStrokeWidth)
   const removeEdge = useFlowStore((s) => s.removeEdge)
   const { deleteElements } = useReactFlow()
+
+  const sourceNode = useInternalNode(source)
+  const targetNode = useInternalNode(target)
 
   useEffect(() => setText(data?.label ?? ''), [data?.label])
   useEffect(() => {
@@ -29,14 +44,26 @@ export default function LabeledEdge({
     }
   }, [editing])
 
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  })
+  if (!sourceNode || !targetNode) return null
+
+  const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(sourceNode, targetNode)
+  const isAligned = Math.abs(sx - tx) < ALIGN_TOLERANCE || Math.abs(sy - ty) < ALIGN_TOLERANCE
+
+  const [edgePath, labelX, labelY] = isAligned
+    ? getStraightPath({ sourceX: sx, sourceY: sy, targetX: tx, targetY: ty })
+    : getSmoothStepPath({
+        sourceX: sx,
+        sourceY: sy,
+        sourcePosition: sourcePos,
+        targetX: tx,
+        targetY: ty,
+        targetPosition: targetPos,
+        borderRadius: 0,
+      })
+
+  const hasArrowStart = Boolean(markerStart)
+  const hasArrowEnd = Boolean(markerEnd)
+  const strokeWidth = data?.strokeWidth ?? DEFAULT_STROKE_WIDTH
 
   function commit() {
     setEditing(false)
@@ -45,6 +72,11 @@ export default function LabeledEdge({
 
   function handleContextMenu(e) {
     e.preventDefault()
+    setMenuPos({ x: e.clientX, y: e.clientY })
+  }
+
+  function handleDelete() {
+    setMenuPos(null)
     if (confirm('この矢印を削除しますか？')) {
       deleteElements({ edges: [{ id }] })
       removeEdge(id)
@@ -56,8 +88,9 @@ export default function LabeledEdge({
       <BaseEdge
         id={id}
         path={edgePath}
+        markerStart={markerStart}
         markerEnd={markerEnd}
-        style={{ stroke: selected ? '#3b82f6' : '#64748b', strokeWidth: 2 }}
+        style={{ stroke: selected ? '#3b82f6' : '#64748b', strokeWidth }}
         interactionWidth={20}
       />
       <EdgeLabelRenderer>
@@ -94,6 +127,19 @@ export default function LabeledEdge({
           )}
         </div>
       </EdgeLabelRenderer>
+      {menuPos && (
+        <EdgeContextMenu
+          x={menuPos.x}
+          y={menuPos.y}
+          hasArrowStart={hasArrowStart}
+          hasArrowEnd={hasArrowEnd}
+          strokeWidth={strokeWidth}
+          onSetArrowStyle={(arrowStart, arrowEnd) => updateEdgeArrowStyle(id, { arrowStart, arrowEnd })}
+          onSetStrokeWidth={(w) => updateEdgeStrokeWidth(id, w)}
+          onDelete={handleDelete}
+          onClose={() => setMenuPos(null)}
+        />
+      )}
     </>
   )
 }

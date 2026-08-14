@@ -2,8 +2,8 @@ import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from
 import { STATE_VERSION } from '../store/useFlowStore'
 
 export function buildShareUrl(state) {
-  const { direction, actors, nodes, edges } = state
-  const payload = { version: STATE_VERSION, direction, actors, nodes, edges }
+  const { direction, actors, groups, nodes, edges } = state
+  const payload = { version: STATE_VERSION, direction, actors, groups, nodes, edges }
   const compressed = compressToEncodedURIComponent(JSON.stringify(payload))
   const url = new URL(window.location.href)
   url.hash = `d=${compressed}`

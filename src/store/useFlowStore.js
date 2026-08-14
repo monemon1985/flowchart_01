@@ -1,9 +1,15 @@
 import { create, useStore } from 'zustand'
 import { temporal } from 'zundo'
-import { applyNodeChanges, applyEdgeChanges, addEdge as addEdgeToList } from '@xyflow/react'
+import { applyNodeChanges, applyEdgeChanges, addEdge as addEdgeToList, MarkerType } from '@xyflow/react'
 import { nanoid } from '../utils/nanoid'
 import { ACTOR_COLORS, MAX_ACTORS } from './actorColors'
 import { autoLayout } from '../utils/layout'
+import { DEFAULT_STROKE_WIDTH } from '../edges/strokeWidthPresets'
+
+const ARROW_COLOR = '#64748b'
+function arrowMarker() {
+  return { type: MarkerType.ArrowClosed, color: ARROW_COLOR }
+}
 
 const STORAGE_KEY = 'flowchart01-state'
 export const STATE_VERSION = 1
@@ -15,6 +21,7 @@ function stripVisualState(state) {
   return JSON.stringify({
     direction: state.direction,
     actors: state.actors,
+    groups: state.groups,
     nodes: (state.nodes ?? []).map(strip),
     edges: (state.edges ?? []).map(strip),
   })
@@ -33,6 +40,7 @@ function emptyState() {
     version: STATE_VERSION,
     direction: 'LR',
     actors,
+    groups: [],
     nodes: [],
     edges: [],
   }
@@ -51,11 +59,15 @@ function loadFromStorage() {
 }
 
 function persist(state) {
-  const { version, direction, actors, nodes, edges } = state
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ version, direction, actors, nodes, edges }))
+  const { version, direction, actors, groups, nodes, edges } = state
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ version, direction, actors, groups, nodes, edges }),
+  )
 }
 
 const initial = loadFromStorage() ?? emptyState()
+if (!initial.groups) initial.groups = []
 
 export const useFlowStore = create(
   temporal(
@@ -97,10 +109,18 @@ export const useFlowStore = create(
         persist(get())
       },
 
-      onConnect(connection) {
+      onConnect(connection, opts = {}) {
+        const { arrowStart = false, arrowEnd = true, strokeWidth = DEFAULT_STROKE_WIDTH } = opts
         set((state) => ({
           edges: addEdgeToList(
-            { ...connection, id: nanoid(), type: 'labeled', data: { label: '' } },
+            {
+              ...connection,
+              id: nanoid(),
+              type: 'labeled',
+              markerStart: arrowStart ? arrowMarker() : undefined,
+              markerEnd: arrowEnd ? arrowMarker() : undefined,
+              data: { label: '', strokeWidth },
+            },
             state.edges,
           ),
         }))
@@ -110,6 +130,30 @@ export const useFlowStore = create(
       updateEdgeLabel(edgeId, label) {
         set((state) => ({
           edges: state.edges.map((e) => (e.id === edgeId ? { ...e, data: { ...e.data, label } } : e)),
+        }))
+        persist(get())
+      },
+
+      updateEdgeArrowStyle(edgeId, { arrowStart, arrowEnd }) {
+        set((state) => ({
+          edges: state.edges.map((e) =>
+            e.id === edgeId
+              ? {
+                  ...e,
+                  markerStart: arrowStart ? arrowMarker() : undefined,
+                  markerEnd: arrowEnd ? arrowMarker() : undefined,
+                }
+              : e,
+          ),
+        }))
+        persist(get())
+      },
+
+      updateEdgeStrokeWidth(edgeId, strokeWidth) {
+        set((state) => ({
+          edges: state.edges.map((e) =>
+            e.id === edgeId ? { ...e, data: { ...e.data, strokeWidth } } : e,
+          ),
         }))
         persist(get())
       },
@@ -145,6 +189,9 @@ export const useFlowStore = create(
       removeActor(actorId) {
         set((state) => ({
           actors: state.actors.filter((a) => a.id !== actorId),
+          groups: state.groups
+            .map((g) => ({ ...g, actorIds: g.actorIds.filter((id) => id !== actorId) }))
+            .filter((g) => g.actorIds.length > 0),
           nodes: state.nodes.filter(
             (n) => n.data?.actorId !== actorId && n.id !== `lane-${actorId}`,
           ),
@@ -155,6 +202,40 @@ export const useFlowStore = create(
             return !removedNodeIds.has(e.source) && !removedNodeIds.has(e.target)
           }),
         }))
+        get().autoLayout()
+      },
+
+      /** 選択された役割者(actorIds)を1つの名前付きグループにまとめる。1人は最大1グループ。 */
+      createGroup(name, actorIds) {
+        set((state) => {
+          const idSet = new Set(actorIds)
+          const firstIndex = state.actors.findIndex((a) => idSet.has(a.id))
+          const members = state.actors.filter((a) => idSet.has(a.id))
+          const others = state.actors.filter((a) => !idSet.has(a.id))
+          const reordered = [...others]
+          reordered.splice(firstIndex, 0, ...members)
+
+          const cleanedGroups = state.groups
+            .map((g) => ({ ...g, actorIds: g.actorIds.filter((id) => !idSet.has(id)) }))
+            .filter((g) => g.actorIds.length > 0)
+
+          return {
+            actors: reordered,
+            groups: [...cleanedGroups, { id: nanoid(), name, actorIds }],
+          }
+        })
+        get().autoLayout()
+      },
+
+      renameGroup(groupId, name) {
+        set((state) => ({
+          groups: state.groups.map((g) => (g.id === groupId ? { ...g, name } : g)),
+        }))
+        persist(get())
+      },
+
+      removeGroup(groupId) {
+        set((state) => ({ groups: state.groups.filter((g) => g.id !== groupId) }))
         get().autoLayout()
       },
 
@@ -193,11 +274,52 @@ export const useFlowStore = create(
         persist(get())
       },
 
+      /**
+       * 複数選択したノード(+その間のエッジ)を貼り付ける。
+       * laneOverride が指定された場合はそのレーンへ dx/dy 分だけ平行移動して複製し、
+       * 指定がなければ元のレーンに既定オフセットで複製する。
+       */
+      pasteClipboard(clipNodes, clipEdges, laneOverride) {
+        if (clipNodes.length === 0) return
+        const OFFSET = 32
+        const idMap = new Map(clipNodes.map((n) => [n.id, nanoid()]))
+
+        set((state) => {
+          const newNodes = clipNodes.map((n) => ({
+            ...n,
+            id: idMap.get(n.id),
+            selected: true,
+            dragging: false,
+            data: { ...n.data, actorId: laneOverride?.actorId ?? n.data.actorId },
+            parentId: laneOverride ? `lane-${laneOverride.actorId}` : n.parentId,
+            position: laneOverride
+              ? { x: n.position.x + laneOverride.dx, y: n.position.y + laneOverride.dy }
+              : { x: n.position.x + OFFSET, y: n.position.y + OFFSET },
+          }))
+          const newEdges = clipEdges
+            .filter((e) => idMap.has(e.source) && idMap.has(e.target))
+            .map((e) => ({
+              ...e,
+              id: nanoid(),
+              source: idMap.get(e.source),
+              target: idMap.get(e.target),
+              selected: true,
+            }))
+
+          return {
+            nodes: [...state.nodes.map((n) => ({ ...n, selected: false })), ...newNodes],
+            edges: [...state.edges.map((e) => ({ ...e, selected: false })), ...newEdges],
+          }
+        })
+        persist(get())
+      },
+
       loadState(newState) {
         set({
           version: STATE_VERSION,
           direction: newState.direction ?? 'LR',
           actors: newState.actors ?? defaultActors(),
+          groups: newState.groups ?? [],
           nodes: newState.nodes ?? [],
           edges: newState.edges ?? [],
         })
@@ -215,6 +337,7 @@ export const useFlowStore = create(
           version: STATE_VERSION,
           direction: template.direction ?? 'LR',
           actors: template.actors,
+          groups: template.groups ?? [],
           nodes: template.nodes,
           edges: template.edges,
         })
@@ -226,6 +349,7 @@ export const useFlowStore = create(
       partialize: (state) => ({
         direction: state.direction,
         actors: state.actors,
+        groups: state.groups,
         nodes: state.nodes,
         edges: state.edges,
       }),

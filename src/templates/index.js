@@ -1,9 +1,18 @@
+import { MarkerType } from '@xyflow/react'
 import { ACTOR_COLORS } from '../store/actorColors'
+import { DEFAULT_STROKE_WIDTH } from '../edges/strokeWidthPresets'
 
 const P0 = { x: 0, y: 0 }
 
 function edge(id, source, target, label = '') {
-  return { id, source, target, type: 'labeled', data: { label } }
+  return {
+    id,
+    source,
+    target,
+    type: 'labeled',
+    markerEnd: { type: MarkerType.ArrowClosed, color: '#64748b' },
+    data: { label, strokeWidth: DEFAULT_STROKE_WIDTH },
+  }
 }
 
 function node(id, type, actorId, label) {

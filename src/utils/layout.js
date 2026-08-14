@@ -1,5 +1,11 @@
 import dagre from '@dagrejs/dagre'
-import { NODE_DIMENSIONS, LANE_HEADER, LANE_PADDING, LANE_GAP } from '../nodes/nodeDimensions'
+import {
+  NODE_DIMENSIONS,
+  LANE_HEADER,
+  LANE_PADDING,
+  LANE_GAP,
+  GROUP_FRAME_MARGIN,
+} from '../nodes/nodeDimensions'
 
 const RANK_SEP = 90
 const NODE_SEP = 50
@@ -28,19 +34,46 @@ function runDagre(contentNodes, edges, direction) {
   return g
 }
 
+/** レーン矩形群から、各グループのメンバーレーンを包む枠ノードを合成する */
+function buildGroupFrameNodes(laneRects, groups) {
+  return groups
+    .map((group) => {
+      const rects = group.actorIds.map((id) => laneRects[id]).filter(Boolean)
+      if (rects.length === 0) return null
+      const minX = Math.min(...rects.map((r) => r.x)) - GROUP_FRAME_MARGIN
+      const minY = Math.min(...rects.map((r) => r.y)) - GROUP_FRAME_MARGIN
+      const maxX = Math.max(...rects.map((r) => r.x + r.width)) + GROUP_FRAME_MARGIN
+      const maxY = Math.max(...rects.map((r) => r.y + r.height)) + GROUP_FRAME_MARGIN
+      return {
+        id: `group-${group.id}`,
+        type: 'groupFrame',
+        position: { x: minX, y: minY },
+        style: { width: maxX - minX, height: maxY - minY },
+        data: { name: group.name },
+        draggable: false,
+        selectable: false,
+        zIndex: -2,
+      }
+    })
+    .filter(Boolean)
+}
+
 /**
  * スイムレーン対応の自動整列。
  * 1) 全ノード・全エッジで dagre を走らせ「流れ方向」の座標(rank)を得る
  * 2) レーンごとに、そのレーン内のノード＋エッジだけで dagre を走らせ「レーン内での並び(直交方向)」を得る
  * 3) レーン(帯)は actor の並び順で直交方向に積み、フロー方向の長さは全レーン共通にする
+ * 4) グループが指定されていれば、そのメンバーレーンを包む枠ノード(groupFrame)を合成する
  */
-export function autoLayout({ nodes, edges, actors, direction }) {
+export function autoLayout({ nodes, edges, actors, direction, groups = [] }) {
   const laneNodes = nodes.filter((n) => n.type === 'lane')
-  const contentNodes = nodes.filter((n) => n.type !== 'lane')
+  // groupFrame は毎回このレイアウト計算から作り直す合成ノードなので、
+  // 通常のコンテンツノードとして dagre 配置対象に混ぜてはいけない。
+  const contentNodes = nodes.filter((n) => n.type !== 'lane' && n.type !== 'groupFrame')
   const isLR = direction === 'LR'
 
   if (contentNodes.length === 0) {
-    return { nodes: layoutEmptyLanes(laneNodes, actors, direction), edges }
+    return { nodes: layoutEmptyLanes(laneNodes, actors, direction, groups), edges }
   }
 
   const globalGraph = runDagre(contentNodes, edges, direction)
@@ -130,21 +163,25 @@ export function autoLayout({ nodes, edges, actors, direction }) {
     }
   })
 
+  const groupFrameNodes = buildGroupFrameNodes(laneRects, groups)
+
   return {
-    nodes: [...newLaneNodes, ...newContentNodes],
+    nodes: [...groupFrameNodes, ...newLaneNodes, ...newContentNodes],
     edges,
   }
 }
 
-function layoutEmptyLanes(laneNodes, actors, direction) {
+function layoutEmptyLanes(laneNodes, actors, direction, groups = []) {
   const isLR = direction === 'LR'
   let crossCursor = 0
-  return actors.map((actor) => {
+  const laneRects = {}
+  const newLaneNodes = actors.map((actor) => {
     const existing = laneNodes.find((n) => n.data?.actorId === actor.id)
     const laneCrossLength = LANE_HEADER + NODE_DIMENSIONS.action.height + LANE_PADDING
     const rect = isLR
       ? { x: 0, y: crossCursor, width: 640, height: laneCrossLength }
       : { x: crossCursor, y: 0, width: laneCrossLength, height: 640 }
+    laneRects[actor.id] = rect
     crossCursor += laneCrossLength + LANE_GAP
     return {
       id: existing?.id ?? `lane-${actor.id}`,
@@ -157,4 +194,6 @@ function layoutEmptyLanes(laneNodes, actors, direction) {
       zIndex: -1,
     }
   })
+  const groupFrameNodes = buildGroupFrameNodes(laneRects, groups)
+  return [...groupFrameNodes, ...newLaneNodes]
 }

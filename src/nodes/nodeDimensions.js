@@ -7,3 +7,4 @@ export const NODE_DIMENSIONS = {
 export const LANE_HEADER = 56
 export const LANE_PADDING = 28
 export const LANE_GAP = 16
+export const GROUP_FRAME_MARGIN = 14

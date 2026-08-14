@@ -26,13 +26,7 @@ export default function LaneNode({ data }) {
           borderBottom: !isLR ? `2px solid ${actor.color.border}` : undefined,
         }}
       >
-        <span
-          style={
-            isLR
-              ? { writingMode: 'vertical-rl', transform: 'rotate(180deg)' }
-              : undefined
-          }
-        >
+        <span style={isLR ? { writingMode: 'vertical-rl' } : undefined}>
           {actor.name}
         </span>
       </div>

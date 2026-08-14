@@ -1,8 +1,8 @@
 import { STATE_VERSION } from '../store/useFlowStore'
 
 export function downloadJson(state, filename = 'flowchart.json') {
-  const { direction, actors, nodes, edges } = state
-  const payload = { version: STATE_VERSION, direction, actors, nodes, edges }
+  const { direction, actors, groups, nodes, edges } = state
+  const payload = { version: STATE_VERSION, direction, actors, groups, nodes, edges }
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

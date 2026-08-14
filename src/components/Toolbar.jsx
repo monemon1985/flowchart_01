@@ -18,6 +18,15 @@ export default function Toolbar({ onOpenTemplates }) {
   const { getNodes, getNodesBounds } = useReactFlow()
   const fileInputRef = useRef(null)
   const [copyMessage, setCopyMessage] = useState('')
+  const [exportError, setExportError] = useState('')
+
+  function handleExport(format) {
+    setExportError('')
+    exportDiagram(getNodesBounds, getNodes(), format).catch((err) => {
+      console.error(err)
+      setExportError(`${format.toUpperCase()}書き出しに失敗しました: ${err.message}`)
+    })
+  }
 
   async function handleShare() {
     const url = buildShareUrl(state)
@@ -104,33 +113,18 @@ export default function Toolbar({ onOpenTemplates }) {
 
       <div className="w-px h-5 bg-slate-200 mx-1" />
 
-      <button
-        type="button"
-        onClick={() =>
-          exportDiagram(getNodesBounds, getNodes(), 'png').catch((err) => {
-            console.error(err)
-            alert('PNG書き出しに失敗しました: ' + err.message)
-          })
-        }
-        className="toolbar-btn"
-      >
+      <button type="button" onClick={() => handleExport('png')} className="toolbar-btn">
         PNG書き出し
       </button>
-      <button
-        type="button"
-        onClick={() =>
-          exportDiagram(getNodesBounds, getNodes(), 'svg').catch((err) => {
-            console.error(err)
-            alert('SVG書き出しに失敗しました: ' + err.message)
-          })
-        }
-        className="toolbar-btn"
-      >
+      <button type="button" onClick={() => handleExport('svg')} className="toolbar-btn">
         SVG書き出し
       </button>
 
       {copyMessage && (
         <span className="ml-2 text-xs text-emerald-600 truncate max-w-xs">{copyMessage}</span>
+      )}
+      {exportError && (
+        <span className="ml-2 text-xs text-red-600 truncate max-w-xs">{exportError}</span>
       )}
     </header>
   )
