@@ -142,6 +142,7 @@ export default function FlowEditor() {
         edgesReconnectable
         connectionMode={ConnectionMode.Loose}
         defaultEdgeOptions={defaultEdgeOptions}
+        connectionRadius={100}
         minZoom={0.2}
         maxZoom={2}
         fitView

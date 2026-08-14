@@ -135,12 +135,15 @@ export default function LabeledEdge({
               }}
               className="w-20 rounded border border-slate-300 bg-white px-1 text-xs text-center outline-none"
             />
+          ) : text ? (
+            <div className="rounded bg-white border border-slate-300 px-1.5 py-0.5 text-xs text-slate-700 shadow-sm">
+              {text}
+            </div>
           ) : (
-            text && (
-              <div className="rounded bg-white border border-slate-300 px-1.5 py-0.5 text-xs text-slate-700 shadow-sm">
-                {text}
-              </div>
-            )
+            <div
+              className="w-4 h-4 rounded-full border border-dashed border-slate-300 bg-white/70 opacity-40 hover:opacity-100 transition-opacity"
+              title="ダブルクリックで文字を追加"
+            />
           )}
         </div>
       </EdgeLabelRenderer>
