@@ -6,9 +6,10 @@ import {
   getSmoothStepPath,
   useInternalNode,
   useReactFlow,
+  useEdges,
 } from '@xyflow/react'
 import { useFlowStore } from '../store/useFlowStore'
-import { getEdgeParams } from '../utils/edgeGeometry'
+import { getEdgeParams, getBranchEdgeParams } from '../utils/edgeGeometry'
 import { DEFAULT_STROKE_WIDTH } from './strokeWidthPresets'
 import EdgeContextMenu from './EdgeContextMenu'
 
@@ -35,6 +36,8 @@ export default function LabeledEdge({
 
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
+  const allEdges = useEdges()
+  const direction = useFlowStore((s) => s.direction)
 
   useEffect(() => setText(data?.label ?? ''), [data?.label])
   useEffect(() => {
@@ -46,20 +49,34 @@ export default function LabeledEdge({
 
   if (!sourceNode || !targetNode) return null
 
-  const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(sourceNode, targetNode)
-  const isAligned = Math.abs(sx - tx) < ALIGN_TOLERANCE || Math.abs(sy - ty) < ALIGN_TOLERANCE
+  // 同じsourceから出るエッジが2本以上ある場合は「幹が1本にまとまって見える」
+  // 分岐専用のパスを使う（src/utils/edgeGeometry.js の getBranchEdgeParams 参照）。
+  const siblingCount = allEdges.filter((e) => e.source === source).length
+  const isBranch = siblingCount >= 2
 
-  const [edgePath, labelX, labelY] = isAligned
-    ? getStraightPath({ sourceX: sx, sourceY: sy, targetX: tx, targetY: ty })
-    : getSmoothStepPath({
-        sourceX: sx,
-        sourceY: sy,
-        sourcePosition: sourcePos,
-        targetX: tx,
-        targetY: ty,
-        targetPosition: targetPos,
-        borderRadius: 0,
-      })
+  let edgePath, labelX, labelY
+
+  if (isBranch) {
+    const branch = getBranchEdgeParams(sourceNode, targetNode, direction)
+    edgePath = branch.path
+    labelX = branch.labelX
+    labelY = branch.labelY
+  } else {
+    const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(sourceNode, targetNode)
+    const isAligned = Math.abs(sx - tx) < ALIGN_TOLERANCE || Math.abs(sy - ty) < ALIGN_TOLERANCE
+
+    ;[edgePath, labelX, labelY] = isAligned
+      ? getStraightPath({ sourceX: sx, sourceY: sy, targetX: tx, targetY: ty })
+      : getSmoothStepPath({
+          sourceX: sx,
+          sourceY: sy,
+          sourcePosition: sourcePos,
+          targetX: tx,
+          targetY: ty,
+          targetPosition: targetPos,
+          borderRadius: 0,
+        })
+  }
 
   const hasArrowStart = Boolean(markerStart)
   const hasArrowEnd = Boolean(markerEnd)

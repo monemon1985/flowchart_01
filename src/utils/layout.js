@@ -117,13 +117,26 @@ export function autoLayout({ nodes, edges, actors, direction, groups = [] }) {
   })
   const laneFlowLength = maxFlowExtent + LANE_PADDING * 2
 
+  // 各レーンが「中身が必要とする最小の交差軸長さ」を先に計算する（下限として使う）。
+  // 起動時のデフォルトは全レーンで一律の幅にする（その中の最大値を採用）。
+  // actor.laneSize が手動リサイズで設定されていればそちらを優先しつつ、
+  // 中身が入りきらないほど小さくはできないよう下限でガードする。
+  const minLaneCrossLengthByActor = {}
+  actors.forEach((actor) => {
+    const contentCrossSize = crossSizeByActor[actor.id] || NODE_DIMENSIONS.action.height
+    const laneCrossSize = Math.max(contentCrossSize + LANE_PADDING * 2, LANE_HEADER + NODE_DIMENSIONS.action.height + LANE_PADDING)
+    minLaneCrossLengthByActor[actor.id] = laneCrossSize + LANE_HEADER
+  })
+  const uniformCrossLength = Math.max(
+    LANE_HEADER + NODE_DIMENSIONS.action.height + LANE_PADDING,
+    ...actors.map((a) => minLaneCrossLengthByActor[a.id]),
+  )
+
   // レーン(帯)を直交方向に積んでいく
   let crossCursor = 0
   const laneRects = {}
   actors.forEach((actor) => {
-    const contentCrossSize = crossSizeByActor[actor.id] || NODE_DIMENSIONS.action.height
-    const laneCrossSize = Math.max(contentCrossSize + LANE_PADDING * 2, LANE_HEADER + NODE_DIMENSIONS.action.height + LANE_PADDING)
-    const laneCrossLength = laneCrossSize + LANE_HEADER
+    const laneCrossLength = Math.max(actor.laneSize ?? uniformCrossLength, minLaneCrossLengthByActor[actor.id])
 
     laneRects[actor.id] = isLR
       ? { x: 0, y: crossCursor, width: laneFlowLength, height: laneCrossLength }
@@ -173,11 +186,12 @@ export function autoLayout({ nodes, edges, actors, direction, groups = [] }) {
 
 function layoutEmptyLanes(laneNodes, actors, direction, groups = []) {
   const isLR = direction === 'LR'
+  const minLaneCrossLength = LANE_HEADER + NODE_DIMENSIONS.action.height + LANE_PADDING
   let crossCursor = 0
   const laneRects = {}
   const newLaneNodes = actors.map((actor) => {
     const existing = laneNodes.find((n) => n.data?.actorId === actor.id)
-    const laneCrossLength = LANE_HEADER + NODE_DIMENSIONS.action.height + LANE_PADDING
+    const laneCrossLength = Math.max(actor.laneSize ?? minLaneCrossLength, minLaneCrossLength)
     const rect = isLR
       ? { x: 0, y: crossCursor, width: 640, height: laneCrossLength }
       : { x: crossCursor, y: 0, width: laneCrossLength, height: 640 }

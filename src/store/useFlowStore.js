@@ -158,6 +158,12 @@ export const useFlowStore = create(
         persist(get())
       },
 
+      /** エッジの端を別ノードに繋ぎ直した結果（reconnectEdgeの戻り値）をまるごと反映する */
+      replaceEdges(newEdges) {
+        set({ edges: newEdges })
+        persist(get())
+      },
+
       removeEdge(edgeId) {
         set((state) => ({ edges: state.edges.filter((e) => e.id !== edgeId) }))
         persist(get())
@@ -184,6 +190,14 @@ export const useFlowStore = create(
           actors: state.actors.map((a) => (a.id === actorId ? { ...a, color } : a)),
         }))
         persist(get())
+      },
+
+      /** レーンの太さ(交差軸方向のサイズ)を手動で上書きする。undefinedに戻すと自動(一律幅)に戻る */
+      setActorLaneSize(actorId, size) {
+        set((state) => ({
+          actors: state.actors.map((a) => (a.id === actorId ? { ...a, laneSize: size } : a)),
+        }))
+        get().autoLayout()
       },
 
       removeActor(actorId) {

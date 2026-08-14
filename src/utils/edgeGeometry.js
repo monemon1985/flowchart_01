@@ -57,3 +57,46 @@ export function getEdgeParams(sourceNode, targetNode) {
     targetPos: getEdgePosition(targetNode, targetIntersection),
   }
 }
+
+const JUNCTION_OFFSET = 32
+
+/**
+ * 同じsourceから複数のエッジが出ている「分岐」の見た目用。
+ * source側は流れ方向の辺の中央固定点から出て、一定距離先のジャンクション点まで
+ * 直進する。同じsourceを持つ兄弟エッジは全員この区間(出口→ジャンクション)が
+ * 寸分違わず同じ座標になるため、SVG上で完全に重なって「幹が1本」に見える。
+ * ジャンクションから先だけ、各targetに向けて直角に折れて枝分かれする。
+ */
+export function getBranchEdgeParams(sourceNode, targetNode, direction) {
+  const isLR = direction === 'LR'
+  const { width: sw, height: sh } = sourceNode.measured
+  const { x: snx, y: sny } = sourceNode.internals.positionAbsolute
+  const { width: tw, height: th } = targetNode.measured
+  const { x: tnx, y: tny } = targetNode.internals.positionAbsolute
+
+  if (isLR) {
+    const sx = snx + sw
+    const sy = sny + sh / 2
+    const junctionX = sx + JUNCTION_OFFSET
+    const tx = tnx
+    const ty = tny + th / 2
+    return {
+      path: `M ${sx} ${sy} L ${junctionX} ${sy} L ${junctionX} ${ty} L ${tx} ${ty}`,
+      labelX: (junctionX + tx) / 2,
+      labelY: ty,
+      targetPos: Position.Left,
+    }
+  }
+
+  const sx = snx + sw / 2
+  const sy = sny + sh
+  const junctionY = sy + JUNCTION_OFFSET
+  const tx = tnx + tw / 2
+  const ty = tny
+  return {
+    path: `M ${sx} ${sy} L ${sx} ${junctionY} L ${tx} ${junctionY} L ${tx} ${ty}`,
+    labelX: tx,
+    labelY: (junctionY + ty) / 2,
+    targetPos: Position.Top,
+  }
+}

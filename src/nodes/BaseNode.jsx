@@ -46,22 +46,20 @@ export default function BaseNode({ id, data, selected, width, height, shapeClass
       <div
         className={`absolute inset-0 bg-white ${selected ? 'ring-2 ring-offset-2 ring-blue-500' : ''} ${shapeClassName}`}
       />
+      {/*
+        接続用ハンドルは4方向に1個ずつ（type="source"で統一）。
+        以前はsource/targetを同じ位置に2個ずつ重ねていたため、
+        どちらを掴んだかで接続の向きが決まってしまい、矢印が逆になる
+        バグの原因になっていた。connectionMode="loose"（FlowEditor.jsx）と
+        組み合わせることで、このハンドル1個から双方向に接続できる。
+      */}
       {HANDLE_POSITIONS.map((pos) => (
         <Handle
-          key={`s-${pos}`}
+          key={pos}
           type="source"
           position={pos}
           id={pos}
-          className="!w-2.5 !h-2.5 !bg-slate-400 !border-white !border opacity-0 group-hover:opacity-100 !z-20"
-        />
-      ))}
-      {HANDLE_POSITIONS.map((pos) => (
-        <Handle
-          key={`t-${pos}`}
-          type="target"
-          position={pos}
-          id={pos}
-          className="!w-2.5 !h-2.5 !bg-slate-400 !border-white !border opacity-0 group-hover:opacity-100 !z-20"
+          className="!w-3.5 !h-3.5 !bg-slate-400 !border-white !border opacity-0 group-hover:opacity-100 !z-20"
         />
       ))}
       <div className={`relative z-10 flex items-center justify-center w-full h-full text-center leading-snug break-words ${textClassName}`}>

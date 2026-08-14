@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { ReactFlow, Background, Controls, useReactFlow } from '@xyflow/react'
+import { ReactFlow, Background, Controls, ConnectionMode, useReactFlow, reconnectEdge } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useFlowStore } from '../store/useFlowStore'
 import { useUiPrefsStore } from '../store/useUiPrefsStore'
@@ -38,6 +38,7 @@ export default function FlowEditor() {
   const onNodesChange = useFlowStore((s) => s.onNodesChange)
   const onEdgesChange = useFlowStore((s) => s.onEdgesChange)
   const onConnectAction = useFlowStore((s) => s.onConnect)
+  const replaceEdges = useFlowStore((s) => s.replaceEdges)
   const addNode = useFlowStore((s) => s.addNode)
   const newEdgeArrowStart = useUiPrefsStore((s) => s.newEdgeArrowStart)
   const newEdgeArrowEnd = useUiPrefsStore((s) => s.newEdgeArrowEnd)
@@ -53,6 +54,11 @@ export default function FlowEditor() {
         strokeWidth: newEdgeStrokeWidth,
       }),
     [onConnectAction, newEdgeArrowStart, newEdgeArrowEnd, newEdgeStrokeWidth],
+  )
+
+  const onReconnect = useCallback(
+    (oldEdge, newConnection) => replaceEdges(reconnectEdge(oldEdge, newConnection, edges)),
+    [replaceEdges, edges],
   )
 
   const onDragOver = useCallback((e) => {
@@ -132,6 +138,9 @@ export default function FlowEditor() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onReconnect={onReconnect}
+        edgesReconnectable
+        connectionMode={ConnectionMode.Loose}
         defaultEdgeOptions={defaultEdgeOptions}
         minZoom={0.2}
         maxZoom={2}
