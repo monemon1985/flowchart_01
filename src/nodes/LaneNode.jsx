@@ -40,8 +40,8 @@ export default function LaneNode({ id, data }) {
         className="group/resize !border-0 flex items-center justify-center !bg-transparent"
         style={
           isLR
-            ? { height: HIT_AREA, marginTop: -HIT_AREA / 2 }
-            : { width: HIT_AREA, marginLeft: -HIT_AREA / 2 }
+            ? { height: HIT_AREA, marginTop: -HIT_AREA / 2, pointerEvents: 'auto' }
+            : { width: HIT_AREA, marginLeft: -HIT_AREA / 2, pointerEvents: 'auto' }
         }
       >
         <div
