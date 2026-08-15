@@ -127,6 +127,13 @@ export const useFlowStore = create(
         persist(get())
       },
 
+      updateEdgeLabelOffset(edgeId, labelT) {
+        set((state) => ({
+          edges: state.edges.map((e) => (e.id === edgeId ? { ...e, data: { ...e.data, labelT } } : e)),
+        }))
+        persist(get())
+      },
+
       updateEdgeLabel(edgeId, label) {
         set((state) => ({
           edges: state.edges.map((e) => (e.id === edgeId ? { ...e, data: { ...e.data, label } } : e)),

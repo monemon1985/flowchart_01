@@ -19,6 +19,8 @@ export default function LabeledEdge({
   id,
   source,
   target,
+  sourceHandleId,
+  targetHandleId,
   data,
   markerStart,
   markerEnd,
@@ -27,12 +29,15 @@ export default function LabeledEdge({
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(data?.label ?? '')
   const [menuPos, setMenuPos] = useState(null)
+  const [dragLabelT, setDragLabelT] = useState(null)
   const inputRef = useRef(null)
+  const pathRef = useRef(null)
   const updateEdgeLabel = useFlowStore((s) => s.updateEdgeLabel)
+  const updateEdgeLabelOffset = useFlowStore((s) => s.updateEdgeLabelOffset)
   const updateEdgeArrowStyle = useFlowStore((s) => s.updateEdgeArrowStyle)
   const updateEdgeStrokeWidth = useFlowStore((s) => s.updateEdgeStrokeWidth)
   const removeEdge = useFlowStore((s) => s.removeEdge)
-  const { deleteElements } = useReactFlow()
+  const { deleteElements, screenToFlowPosition } = useReactFlow()
 
   const sourceNode = useInternalNode(source)
   const targetNode = useInternalNode(target)
@@ -62,7 +67,7 @@ export default function LabeledEdge({
     labelX = branch.labelX
     labelY = branch.labelY
   } else {
-    const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(sourceNode, targetNode)
+    const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(sourceNode, targetNode, sourceHandleId, targetHandleId)
     const isAligned = Math.abs(sx - tx) < ALIGN_TOLERANCE || Math.abs(sy - ty) < ALIGN_TOLERANCE
 
     ;[edgePath, labelX, labelY] = isAligned
@@ -78,6 +83,17 @@ export default function LabeledEdge({
         })
   }
 
+  // ラベルを手動で線に沿ってスライドした位置(labelT: 0〜1)が保存されていれば、
+  // 実際に描画中のパス(edgePath)上をその割合でたどった点をラベル位置として使う。
+  // ドラッグ中はストア確定前のローカル値(dragLabelT)を優先してなめらかに追従させる。
+  const labelT = dragLabelT ?? data?.labelT
+  if (typeof labelT === 'number' && pathRef.current) {
+    const total = pathRef.current.getTotalLength()
+    const pt = pathRef.current.getPointAtLength(labelT * total)
+    labelX = pt.x
+    labelY = pt.y
+  }
+
   const hasArrowStart = Boolean(markerStart)
   const hasArrowEnd = Boolean(markerEnd)
   const strokeWidth = data?.strokeWidth ?? DEFAULT_STROKE_WIDTH
@@ -85,6 +101,40 @@ export default function LabeledEdge({
   function commit() {
     setEditing(false)
     updateEdgeLabel(id, text.trim())
+  }
+
+  function handleLabelDragStart(e) {
+    if (editing) return
+    e.stopPropagation()
+    const path = pathRef.current
+    if (!path) return
+    const total = path.getTotalLength()
+
+    function nearestT(clientX, clientY) {
+      const { x, y } = screenToFlowPosition({ x: clientX, y: clientY })
+      const steps = 60
+      let best = { t: 0, d: Infinity }
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps
+        const pt = path.getPointAtLength(t * total)
+        const d = (pt.x - x) ** 2 + (pt.y - y) ** 2
+        if (d < best.d) best = { t, d }
+      }
+      return best.t
+    }
+
+    function onMove(moveEvent) {
+      setDragLabelT(nearestT(moveEvent.clientX, moveEvent.clientY))
+    }
+    function onUp(upEvent) {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      const finalT = nearestT(upEvent.clientX, upEvent.clientY)
+      setDragLabelT(null)
+      updateEdgeLabelOffset(id, finalT)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
   }
 
   function handleContextMenu(e) {
@@ -110,13 +160,17 @@ export default function LabeledEdge({
         style={{ stroke: selected ? '#3b82f6' : '#64748b', strokeWidth }}
         interactionWidth={20}
       />
+      {/* ラベル位置をパス上でサンプリングするための非表示パス（表示用edgePathと常に同じ形） */}
+      <path ref={pathRef} d={edgePath} fill="none" stroke="none" />
       <EdgeLabelRenderer>
         <div
           style={{
             position: 'absolute',
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            cursor: editing ? 'text' : 'grab',
           }}
           className="nodrag nopan pointer-events-auto"
+          onMouseDown={handleLabelDragStart}
           onDoubleClick={() => setEditing(true)}
           onContextMenu={handleContextMenu}
         >

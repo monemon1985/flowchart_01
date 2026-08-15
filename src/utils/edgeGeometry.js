@@ -39,23 +39,56 @@ function getEdgePosition(node, intersectionPoint) {
   return Position.Top
 }
 
+const HANDLE_POSITION_VALUES = [Position.Top, Position.Right, Position.Bottom, Position.Left]
+
+/** ノードの指定辺(上下左右)の中央の固定点を返す（フローティングではなく、接続時に選んだハンドルに固定する用） */
+function getFixedHandlePoint(node, position) {
+  const { x, y } = node.internals.positionAbsolute
+  const { width, height } = node.measured
+  switch (position) {
+    case Position.Top:
+      return { x: x + width / 2, y }
+    case Position.Bottom:
+      return { x: x + width / 2, y: y + height }
+    case Position.Left:
+      return { x, y: y + height / 2 }
+    case Position.Right:
+    default:
+      return { x: x + width, y: y + height / 2 }
+  }
+}
+
 /**
  * 2つのノードの現在位置から、両者を結ぶのに最適な接続点(境界上の交点)と
  * その点がどちら側の辺にあるかを都度計算する。
- * ハンドルIDに依存しないため、ノードがどこに動いてもフローティング接続が保たれる。
+ * sourceHandleId/targetHandleIdが指定されている（＝接続時に特定のハンドルから
+ * ドラッグした）場合は、その辺の中央に固定する。未指定の場合のみ、
+ * ノード同士の位置関係から毎回自動計算するフローティング接続になる。
  */
-export function getEdgeParams(sourceNode, targetNode) {
-  const sourceIntersection = getNodeIntersection(sourceNode, targetNode)
-  const targetIntersection = getNodeIntersection(targetNode, sourceNode)
-
-  return {
-    sx: sourceIntersection.x,
-    sy: sourceIntersection.y,
-    tx: targetIntersection.x,
-    ty: targetIntersection.y,
-    sourcePos: getEdgePosition(sourceNode, sourceIntersection),
-    targetPos: getEdgePosition(targetNode, targetIntersection),
+export function getEdgeParams(sourceNode, targetNode, sourceHandleId, targetHandleId) {
+  let sx, sy, sourcePos
+  if (HANDLE_POSITION_VALUES.includes(sourceHandleId)) {
+    sourcePos = sourceHandleId
+    ;({ x: sx, y: sy } = getFixedHandlePoint(sourceNode, sourcePos))
+  } else {
+    const sourceIntersection = getNodeIntersection(sourceNode, targetNode)
+    sx = sourceIntersection.x
+    sy = sourceIntersection.y
+    sourcePos = getEdgePosition(sourceNode, sourceIntersection)
   }
+
+  let tx, ty, targetPos
+  if (HANDLE_POSITION_VALUES.includes(targetHandleId)) {
+    targetPos = targetHandleId
+    ;({ x: tx, y: ty } = getFixedHandlePoint(targetNode, targetPos))
+  } else {
+    const targetIntersection = getNodeIntersection(targetNode, sourceNode)
+    tx = targetIntersection.x
+    ty = targetIntersection.y
+    targetPos = getEdgePosition(targetNode, targetIntersection)
+  }
+
+  return { sx, sy, tx, ty, sourcePos, targetPos }
 }
 
 const JUNCTION_OFFSET = 32

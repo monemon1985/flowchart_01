@@ -5,6 +5,7 @@ import {
   LANE_PADDING,
   LANE_GAP,
   GROUP_FRAME_MARGIN,
+  GROUP_LABEL_STRIP,
 } from '../nodes/nodeDimensions'
 
 const RANK_SEP = 90
@@ -34,14 +35,19 @@ function runDagre(contentNodes, edges, direction) {
   return g
 }
 
-/** レーン矩形群から、各グループのメンバーレーンを包む枠ノードを合成する */
-function buildGroupFrameNodes(laneRects, groups) {
+/**
+ * レーン矩形群から、各グループのメンバーレーンを包む枠ノードを合成する。
+ * ラベル用の帯(GroupFrameNode側で描画)を置くスペースとして、
+ * レーンヘッダーと同じ辺(LRなら左、TBなら上)だけ余白を広めに取る。
+ */
+function buildGroupFrameNodes(laneRects, groups, direction) {
+  const isLR = direction === 'LR'
   return groups
     .map((group) => {
       const rects = group.actorIds.map((id) => laneRects[id]).filter(Boolean)
       if (rects.length === 0) return null
-      const minX = Math.min(...rects.map((r) => r.x)) - GROUP_FRAME_MARGIN
-      const minY = Math.min(...rects.map((r) => r.y)) - GROUP_FRAME_MARGIN
+      const minX = Math.min(...rects.map((r) => r.x)) - (isLR ? GROUP_LABEL_STRIP : GROUP_FRAME_MARGIN)
+      const minY = Math.min(...rects.map((r) => r.y)) - (isLR ? GROUP_FRAME_MARGIN : GROUP_LABEL_STRIP)
       const maxX = Math.max(...rects.map((r) => r.x + r.width)) + GROUP_FRAME_MARGIN
       const maxY = Math.max(...rects.map((r) => r.y + r.height)) + GROUP_FRAME_MARGIN
       return {
@@ -176,7 +182,7 @@ export function autoLayout({ nodes, edges, actors, direction, groups = [] }) {
     }
   })
 
-  const groupFrameNodes = buildGroupFrameNodes(laneRects, groups)
+  const groupFrameNodes = buildGroupFrameNodes(laneRects, groups, direction)
 
   return {
     nodes: [...groupFrameNodes, ...newLaneNodes, ...newContentNodes],
@@ -208,6 +214,6 @@ function layoutEmptyLanes(laneNodes, actors, direction, groups = []) {
       zIndex: -1,
     }
   })
-  const groupFrameNodes = buildGroupFrameNodes(laneRects, groups)
+  const groupFrameNodes = buildGroupFrameNodes(laneRects, groups, direction)
   return [...groupFrameNodes, ...newLaneNodes]
 }
