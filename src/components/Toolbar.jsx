@@ -5,7 +5,7 @@ import { downloadJson, readJsonFile } from '../utils/fileUtils'
 import { buildShareUrl } from '../utils/shareUrl'
 import { exportDiagram } from '../utils/exportUtils'
 
-export default function Toolbar({ onOpenTemplates, onOpenGallery }) {
+export default function Toolbar({ onOpenTemplates, onOpenGallery, onOpenNodePalette, onOpenActorPanel }) {
   const state = useFlowStore()
   const direction = useFlowStore((s) => s.direction)
   const setDirection = useFlowStore((s) => s.setDirection)
@@ -52,14 +52,23 @@ export default function Toolbar({ onOpenTemplates, onOpenGallery }) {
   }
 
   return (
-    <header className="flex items-center gap-2 border-b border-slate-200 px-4 py-2 bg-white">
-      <h1 className="text-sm font-semibold text-slate-800 mr-4">フローチャート</h1>
+    <header className="flex items-center gap-2 border-b border-slate-200 px-4 py-2 bg-white overflow-x-auto">
+      <h1 className="shrink-0 whitespace-nowrap text-sm font-semibold text-slate-800 mr-4">フローチャート</h1>
+
+      <button type="button" onClick={onOpenNodePalette} className="toolbar-btn lg:hidden">
+        ☰ ノード
+      </button>
+      <button type="button" onClick={onOpenActorPanel} className="toolbar-btn lg:hidden">
+        ☰ 役割者
+      </button>
+
+      <div className="w-px h-5 bg-slate-200 mx-1 shrink-0 lg:hidden" />
 
       <button type="button" onClick={onOpenTemplates} className="toolbar-btn">
         テンプレート
       </button>
 
-      <div className="w-px h-5 bg-slate-200 mx-1" />
+      <div className="w-px h-5 bg-slate-200 mx-1 shrink-0" />
 
       <button type="button" onClick={() => undo()} disabled={!canUndo} className="toolbar-btn">
         ↶ 元に戻す
@@ -68,9 +77,9 @@ export default function Toolbar({ onOpenTemplates, onOpenGallery }) {
         ↷ やり直し
       </button>
 
-      <div className="w-px h-5 bg-slate-200 mx-1" />
+      <div className="w-px h-5 bg-slate-200 mx-1 shrink-0" />
 
-      <div className="flex rounded border border-slate-300 overflow-hidden text-xs">
+      <div className="shrink-0 flex rounded border border-slate-300 overflow-hidden text-xs">
         <button
           type="button"
           onClick={() => setDirection('LR')}
@@ -91,7 +100,7 @@ export default function Toolbar({ onOpenTemplates, onOpenGallery }) {
         自動整列
       </button>
 
-      <div className="w-px h-5 bg-slate-200 mx-1" />
+      <div className="w-px h-5 bg-slate-200 mx-1 shrink-0" />
 
       <button type="button" onClick={() => downloadJson(state)} className="toolbar-btn">
         保存(JSON)
@@ -111,13 +120,13 @@ export default function Toolbar({ onOpenTemplates, onOpenGallery }) {
         URLをコピー
       </button>
 
-      <div className="w-px h-5 bg-slate-200 mx-1" />
+      <div className="w-px h-5 bg-slate-200 mx-1 shrink-0" />
 
       <button type="button" onClick={onOpenGallery} className="toolbar-btn">
         🌐 みんなのフロー
       </button>
 
-      <div className="w-px h-5 bg-slate-200 mx-1" />
+      <div className="w-px h-5 bg-slate-200 mx-1 shrink-0" />
 
       <button type="button" onClick={() => handleExport('png')} className="toolbar-btn">
         PNG書き出し

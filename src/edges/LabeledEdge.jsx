@@ -127,14 +127,14 @@ export default function LabeledEdge({
       setDragLabelT(nearestT(moveEvent.clientX, moveEvent.clientY))
     }
     function onUp(upEvent) {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
       const finalT = nearestT(upEvent.clientX, upEvent.clientY)
       setDragLabelT(null)
       updateEdgeLabelOffset(id, finalT)
     }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
   }
 
   function handleContextMenu(e) {
@@ -168,9 +168,10 @@ export default function LabeledEdge({
             position: 'absolute',
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
             cursor: editing ? 'text' : 'grab',
+            touchAction: 'none',
           }}
           className="nodrag nopan pointer-events-auto"
-          onMouseDown={handleLabelDragStart}
+          onPointerDown={handleLabelDragStart}
           onDoubleClick={() => setEditing(true)}
           onContextMenu={handleContextMenu}
         >

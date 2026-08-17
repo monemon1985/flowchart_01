@@ -26,7 +26,7 @@ function buildBlocks(actors, groups) {
   return blocks
 }
 
-export default function ActorPanel() {
+export default function ActorPanel({ onClose }) {
   const actors = useFlowStore((s) => s.actors)
   const groups = useFlowStore((s) => s.groups)
   const nodes = useFlowStore((s) => s.nodes)
@@ -161,10 +161,17 @@ export default function ActorPanel() {
   const checkedActors = actors.filter((a) => checkedIds.has(a.id))
 
   return (
-    <aside className="w-52 shrink-0 border-l border-slate-200 bg-slate-50 p-3 flex flex-col gap-3">
-      <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-        役割者 ({actors.length}/{MAX_ACTORS})
-      </h2>
+    <aside className="w-52 shrink-0 border-l border-slate-200 bg-slate-50 p-3 flex flex-col gap-3 h-full overflow-y-auto">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          役割者 ({actors.length}/{MAX_ACTORS})
+        </h2>
+        {onClose && (
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 text-sm">
+            ✕
+          </button>
+        )}
+      </div>
       <div className="flex flex-col gap-3">
         {blocks.map((block) =>
           block.type === 'single' ? (
