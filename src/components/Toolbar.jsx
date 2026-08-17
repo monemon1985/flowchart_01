@@ -5,7 +5,7 @@ import { downloadJson, readJsonFile } from '../utils/fileUtils'
 import { buildShareUrl } from '../utils/shareUrl'
 import { exportDiagram } from '../utils/exportUtils'
 
-export default function Toolbar({ onOpenTemplates }) {
+export default function Toolbar({ onOpenTemplates, onOpenGallery }) {
   const state = useFlowStore()
   const direction = useFlowStore((s) => s.direction)
   const setDirection = useFlowStore((s) => s.setDirection)
@@ -109,6 +109,12 @@ export default function Toolbar({ onOpenTemplates }) {
 
       <button type="button" onClick={handleShare} className="toolbar-btn">
         URLをコピー
+      </button>
+
+      <div className="w-px h-5 bg-slate-200 mx-1" />
+
+      <button type="button" onClick={onOpenGallery} className="toolbar-btn">
+        🌐 みんなのフロー
       </button>
 
       <div className="w-px h-5 bg-slate-200 mx-1" />
