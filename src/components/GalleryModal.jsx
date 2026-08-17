@@ -15,28 +15,35 @@ export default function GalleryModal({ onClose }) {
   const error = useGalleryStore((s) => s.error)
   const fetchFlows = useGalleryStore((s) => s.fetchFlows)
   const publish = useGalleryStore((s) => s.publish)
+  const updateFlow = useGalleryStore((s) => s.updateFlow)
+  const removeFlow = useGalleryStore((s) => s.removeFlow)
+  const currentFlowId = useGalleryStore((s) => s.currentFlowId)
+  const currentFlowTitle = useGalleryStore((s) => s.currentFlowTitle)
+  const setCurrentFlow = useGalleryStore((s) => s.setCurrentFlow)
 
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
   const [publishing, setPublishing] = useState(false)
   const [publishMessage, setPublishMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState('')
 
   useEffect(() => {
     fetchFlows()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  function currentPayload() {
+    const { direction, actors, groups, nodes, edges } = state
+    return { version: STATE_VERSION, direction, actors, groups, nodes, edges }
+  }
+
   async function handlePublish() {
     const trimmed = title.trim()
     if (!trimmed) return
     setPublishing(true)
     setPublishMessage('')
-    const { direction, actors, groups, nodes, edges } = state
-    const ok = await publish({
-      title: trimmed,
-      author: author.trim(),
-      state: { version: STATE_VERSION, direction, actors, groups, nodes, edges },
-    })
+    const ok = await publish({ title: trimmed, author: author.trim(), state: currentPayload() })
     setPublishing(false)
     if (ok) {
       setTitle('')
@@ -46,10 +53,28 @@ export default function GalleryModal({ onClose }) {
     }
   }
 
+  async function handleOverwriteSave() {
+    setSaving(true)
+    setSaveMessage('')
+    const ok = await updateFlow(currentFlowId, { state: currentPayload() })
+    setSaving(false)
+    if (ok) {
+      setSaveMessage('上書き保存しました。')
+      setTimeout(() => setSaveMessage(''), 3000)
+    }
+  }
+
   function handleOpen(flow) {
     if (confirm(`「${flow.title}」を読み込みます。現在の内容は上書きされます（元に戻すボタンで復元可）。よろしいですか？`)) {
       loadState(flow.state)
+      setCurrentFlow(flow.id, flow.title)
       onClose()
+    }
+  }
+
+  function handleDelete(flow) {
+    if (confirm(`「${flow.title}」をみんなのフローから削除しますか？（この操作は元に戻せません）`)) {
+      removeFlow(flow.id)
     }
   }
 
@@ -62,8 +87,29 @@ export default function GalleryModal({ onClose }) {
         <h2 className="text-base font-semibold text-slate-800 mb-1">みんなのフロー</h2>
         <p className="text-xs text-slate-500 mb-4">他の人が公開したフローを見たり、今のフローを公開したりできます。</p>
 
+        {currentFlowId && (
+          <div className="border border-blue-200 bg-blue-50 rounded p-3 mb-4">
+            <div className="text-xs text-slate-600 mb-2">
+              「{currentFlowTitle}」を開いて編集中です。同じ投稿に上書き保存できます。
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleOverwriteSave}
+                className="text-sm bg-blue-600 text-white rounded px-3 py-1.5 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {saving ? '保存中…' : '上書き保存'}
+              </button>
+              {saveMessage && <span className="text-xs text-emerald-600">{saveMessage}</span>}
+            </div>
+          </div>
+        )}
+
         <div className="border border-slate-200 rounded p-3 mb-4">
-          <div className="text-xs font-semibold text-slate-500 mb-2">このフローを公開する</div>
+          <div className="text-xs font-semibold text-slate-500 mb-2">
+            {currentFlowId ? '別の名前で新しく公開する' : 'このフローを公開する'}
+          </div>
           <div className="flex flex-col gap-2">
             <input
               type="text"
@@ -112,13 +158,23 @@ export default function GalleryModal({ onClose }) {
                   {formatDate(flow.created_at)}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => handleOpen(flow)}
-                className="shrink-0 text-xs border border-slate-300 rounded px-2 py-1 hover:bg-slate-100"
-              >
-                開く
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleOpen(flow)}
+                  className="text-xs border border-slate-300 rounded px-2 py-1 hover:bg-slate-100"
+                >
+                  開く
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(flow)}
+                  className="text-xs text-slate-400 hover:text-red-500 px-1.5 py-1"
+                  title="削除"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
           ))}
         </div>

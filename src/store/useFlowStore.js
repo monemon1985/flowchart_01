@@ -5,6 +5,7 @@ import { nanoid } from '../utils/nanoid'
 import { ACTOR_COLORS, MAX_ACTORS } from './actorColors'
 import { autoLayout } from '../utils/layout'
 import { DEFAULT_STROKE_WIDTH } from '../edges/strokeWidthPresets'
+import { useGalleryStore } from './useGalleryStore'
 
 const ARROW_COLOR = '#64748b'
 function arrowMarker() {
@@ -336,6 +337,9 @@ export const useFlowStore = create(
       },
 
       loadState(newState) {
+        // ギャラリーから開く場合はこの直後に呼び出し側がsetCurrentFlowするので、
+        // ここでは「他の場所からの読み込み」を初期状態として一旦クリアしておく。
+        useGalleryStore.getState().clearCurrentFlow()
         set({
           version: STATE_VERSION,
           direction: newState.direction ?? 'LR',
@@ -348,12 +352,14 @@ export const useFlowStore = create(
       },
 
       resetState() {
+        useGalleryStore.getState().clearCurrentFlow()
         const fresh = emptyState()
         set(fresh)
         persist(get())
       },
 
       loadTemplate(template) {
+        useGalleryStore.getState().clearCurrentFlow()
         set({
           version: STATE_VERSION,
           direction: template.direction ?? 'LR',
