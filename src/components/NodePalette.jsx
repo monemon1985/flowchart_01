@@ -20,6 +20,11 @@ export default function NodePalette({ onClose }) {
   function onDragStart(e, shape) {
     e.dataTransfer.setData('application/flowchart-shape', shape)
     e.dataTransfer.effectAllowed = 'move'
+    // ドロワー表示時、背景の半透明オーバーレイがキャンバスの上に乗っているため、
+    // そのままではドロップ先がキャンバスに届かない。ドラッグ開始と同時にドロワーを閉じ、
+    // キャンバスをドロップ対象として露出させる（HTML5 DnDはdragstart後に要素が
+    // 消えてもドラッグ自体は継続する）。
+    onClose?.()
   }
 
   // ネイティブDrag&Dropはタッチ端末では動かないため、タップでも追加できるようにする。
