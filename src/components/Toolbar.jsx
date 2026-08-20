@@ -15,14 +15,14 @@ export default function Toolbar({ onOpenTemplates, onOpenGallery, onOpenNodePale
   const redo = useTemporalStore((s) => s.redo)
   const canUndo = useTemporalStore((s) => s.pastStates.length > 0)
   const canRedo = useTemporalStore((s) => s.futureStates.length > 0)
-  const { getNodes, getNodesBounds } = useReactFlow()
+  const { screenToFlowPosition } = useReactFlow()
   const fileInputRef = useRef(null)
   const [copyMessage, setCopyMessage] = useState('')
   const [exportError, setExportError] = useState('')
 
   function handleExport(format) {
     setExportError('')
-    exportDiagram(getNodesBounds, getNodes(), format).catch((err) => {
+    exportDiagram(screenToFlowPosition, format).catch((err) => {
       console.error(err)
       setExportError(`${format.toUpperCase()}書き出しに失敗しました: ${err.message}`)
     })

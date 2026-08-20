@@ -19,7 +19,8 @@ export default function NoteNode({ id, data, selected }) {
   const updateNoteColor = useFlowStore((s) => s.updateNoteColor)
   const updateNoteSize = useFlowStore((s) => s.updateNoteSize)
   const removeNode = useFlowStore((s) => s.removeNode)
-  const { deleteElements } = useReactFlow()
+  const { deleteElements, getNode } = useReactFlow()
+  const startSizeRef = useRef(null)
 
   useEffect(() => setText(data.label), [data.label])
   useEffect(() => {
@@ -46,8 +47,24 @@ export default function NoteNode({ id, data, selected }) {
 
   const textColor = data.textColor ?? DEFAULT_TEXT_COLOR
 
+  // リサイズ中は1pxごとにonResizeが発火するため、そのたびにundo履歴を積まず、
+  // ドラッグ中は記録を一時停止して見た目だけ更新する。指を離した瞬間、一旦
+  // 開始時点のサイズへ(一時停止中のまま)静かに戻してから記録を再開して最終値を
+  // セットすることで、undo履歴には正しい1件だけが記録されるようにしている。
+  function handleResizeStart() {
+    const node = getNode(id)
+    startSizeRef.current = { width: node?.style?.width, height: node?.style?.height }
+    useFlowStore.temporal.getState().pause()
+  }
   function handleResize(_event, { width, height }) {
     updateNoteSize(id, { width, height })
+  }
+  function handleResizeEnd(_event, { width, height }) {
+    if (startSizeRef.current) updateNoteSize(id, startSizeRef.current)
+    setTimeout(() => {
+      useFlowStore.temporal.getState().resume()
+      updateNoteSize(id, { width, height })
+    }, 0)
   }
 
   return (
@@ -64,7 +81,9 @@ export default function NoteNode({ id, data, selected }) {
           position={pos}
           minWidth={NOTE_MIN_SIZE}
           minHeight={NOTE_MIN_SIZE}
+          onResizeStart={handleResizeStart}
           onResize={handleResize}
+          onResizeEnd={handleResizeEnd}
           className="!border-0 !bg-transparent"
           style={{ width: 14, height: 14, pointerEvents: 'auto' }}
         />

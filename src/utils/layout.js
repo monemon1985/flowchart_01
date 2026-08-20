@@ -195,6 +195,81 @@ export function autoLayout({ nodes, edges, actors, direction, groups = [], flowL
   }
 }
 
+/**
+ * レーンのリサイズ(交差軸・フロー方向)専用の軽量な再配置。
+ * autoLayout()と違い、dagreを再実行してコンテンツノードの位置を作り直すことはしない
+ * （手動で動かしたノードの配置が、レーンをリサイズしただけで消えてしまうのを防ぐため）。
+ * 中身の必要最小サイズは、既存のノード位置(レーン原点からの相対座標)から逆算する。
+ */
+export function resizeLanes({ nodes, actors, direction, groups = [], flowLength = null }) {
+  const laneNodes = nodes.filter((n) => n.type === 'lane')
+  const noteNodes = nodes.filter((n) => n.type === 'note')
+  const contentNodes = nodes.filter((n) => n.type !== 'lane' && n.type !== 'groupFrame' && n.type !== 'note')
+  const isLR = direction === 'LR'
+
+  if (contentNodes.length === 0) {
+    return [...layoutEmptyLanes(laneNodes, actors, direction, groups, flowLength), ...noteNodes]
+  }
+
+  let maxFlowFootprint = 0
+  const crossExtentByActor = {}
+  contentNodes.forEach((n) => {
+    const { width, height } = dimsOf(n)
+    const footprint = isLR ? n.position.x + width : n.position.y + height
+    if (footprint > maxFlowFootprint) maxFlowFootprint = footprint
+
+    const cross = isLR ? n.position.y - LANE_HEADER : n.position.x - LANE_PADDING
+    const crossExtent = cross + (isLR ? height : width) / 2
+    const actorId = n.data?.actorId
+    if (!actorId) return
+    if (!crossExtentByActor[actorId] || crossExtent > crossExtentByActor[actorId]) {
+      crossExtentByActor[actorId] = crossExtent
+    }
+  })
+  const minLaneFlowLength = maxFlowFootprint + LANE_PADDING
+  const laneFlowLength = Math.max(flowLength ?? minLaneFlowLength, minLaneFlowLength)
+
+  const minLaneCrossLengthByActor = {}
+  actors.forEach((actor) => {
+    const contentCrossSize = crossExtentByActor[actor.id] || 0
+    const laneCrossSize = Math.max(contentCrossSize + LANE_PADDING * 2, LANE_HEADER + NODE_DIMENSIONS.action.height + LANE_PADDING)
+    minLaneCrossLengthByActor[actor.id] = laneCrossSize + LANE_HEADER
+  })
+  const uniformCrossLength = Math.max(
+    LANE_HEADER + NODE_DIMENSIONS.action.height + LANE_PADDING,
+    ...actors.map((a) => minLaneCrossLengthByActor[a.id]),
+  )
+
+  let crossCursor = 0
+  const laneRects = {}
+  actors.forEach((actor) => {
+    const laneCrossLength = Math.max(actor.laneSize ?? uniformCrossLength, minLaneCrossLengthByActor[actor.id])
+    laneRects[actor.id] = isLR
+      ? { x: 0, y: crossCursor, width: laneFlowLength, height: laneCrossLength }
+      : { x: crossCursor, y: 0, width: laneCrossLength, height: laneFlowLength }
+    crossCursor += laneCrossLength + LANE_GAP
+  })
+
+  const newLaneNodes = actors.map((actor) => {
+    const existing = laneNodes.find((n) => n.data?.actorId === actor.id)
+    const rect = laneRects[actor.id]
+    return {
+      id: existing?.id ?? `lane-${actor.id}`,
+      type: 'lane',
+      position: { x: rect.x, y: rect.y },
+      style: { width: rect.width, height: rect.height },
+      data: { actorId: actor.id },
+      draggable: false,
+      selectable: false,
+      zIndex: -1,
+    }
+  })
+
+  const groupFrameNodes = buildGroupFrameNodes(laneRects, groups, direction)
+
+  return [...groupFrameNodes, ...newLaneNodes, ...contentNodes, ...noteNodes]
+}
+
 function layoutEmptyLanes(laneNodes, actors, direction, groups = [], flowLength = null) {
   const isLR = direction === 'LR'
   const minLaneCrossLength = LANE_HEADER + NODE_DIMENSIONS.action.height + LANE_PADDING

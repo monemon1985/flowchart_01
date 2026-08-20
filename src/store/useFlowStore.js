@@ -4,7 +4,7 @@ import { applyNodeChanges, applyEdgeChanges, addEdge as addEdgeToList, MarkerTyp
 import { nanoid } from '../utils/nanoid'
 import { ACTOR_COLORS, MAX_ACTORS } from './actorColors'
 import { NOTE_DIMENSIONS } from '../nodes/nodeDimensions'
-import { autoLayout } from '../utils/layout'
+import { autoLayout, resizeLanes } from '../utils/layout'
 import { DEFAULT_STROKE_WIDTH } from '../edges/strokeWidthPresets'
 import { useGalleryStore } from './useGalleryStore'
 
@@ -97,12 +97,18 @@ export const useFlowStore = create(
 
       onNodesChange(changes) {
         // ドラッグ中の連続更新や選択トグルまで Undo 履歴に積まれるのを防ぐ。
-        // ドラッグ中(dragging:true)は記録を一時停止し、ドロップ確定時にまとめて1件記録する。
+        // ドラッグ中(dragging:true)は記録を一時停止し、ドロップ確定時(dragging:false)に
+        // まとめて1件記録する。
+        // 選択変更やレーンリサイズに伴う寸法変化など、ドラッグと無関係な変化まで
+        // 無条件にresume()すると、レーンリサイズ側が意図的に張った一時停止を
+        // 横から解除してしまう（resizeのonResizeStart/onResizeEndと競合する）ため、
+        // 「ドラッグが終わったこと」を検知したときだけresumeする。
         const isMidDrag = changes.some((c) => c.type === 'position' && c.dragging)
+        const isDragEnd = changes.some((c) => c.type === 'position' && c.dragging === false)
         const temporalApi = useFlowStore.temporal.getState()
         if (isMidDrag) {
           temporalApi.pause()
-        } else {
+        } else if (isDragEnd) {
           temporalApi.resume()
         }
         set((state) => ({ nodes: applyNodeChanges(changes, state.nodes) }))
@@ -204,18 +210,26 @@ export const useFlowStore = create(
         persist(get())
       },
 
-      /** レーンの太さ(交差軸方向のサイズ)を手動で上書きする。undefinedに戻すと自動(一律幅)に戻る */
+      /**
+       * レーンの太さ(交差軸方向のサイズ)を手動で上書きする。undefinedに戻すと自動(一律幅)に戻る。
+       * dagreによる全体再配置(autoLayout)はせず、レーンの矩形だけを再計算する
+       * resizeLanesを使う。手動で動かしたノードの位置がリサイズのたびに
+       * 消えてしまわないようにするため、また1回のset()にまとめてundo/redoが
+       * 1ステップできれいに効くようにするため。
+       */
       setActorLaneSize(actorId, size) {
-        set((state) => ({
-          actors: state.actors.map((a) => (a.id === actorId ? { ...a, laneSize: size } : a)),
-        }))
-        get().autoLayout()
+        set((state) => {
+          const actors = state.actors.map((a) => (a.id === actorId ? { ...a, laneSize: size } : a))
+          const nodes = resizeLanes({ ...state, actors })
+          return { actors, nodes }
+        })
+        persist(get())
       },
 
-      /** 全レーン共通のフロー方向の長さを手動で上書きする */
+      /** 全レーン共通のフロー方向の長さを手動で上書きする(setActorLaneSizeと同じ理由でresizeLanesを使う) */
       setFlowLength(size) {
-        set({ flowLength: size })
-        get().autoLayout()
+        set((state) => ({ flowLength: size, nodes: resizeLanes({ ...state, flowLength: size }) }))
+        persist(get())
       },
 
       removeActor(actorId) {

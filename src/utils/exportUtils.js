@@ -64,12 +64,38 @@ function withExplicitEdgeSvgSize(viewportEl, fn) {
 /**
  * 画面に見えている範囲ではなく、図全体（全ノード・全レーン）を書き出す。
  *
- * getNodesBounds は @xyflow/react から直接importせず、呼び出し側で
- * useReactFlow() から取得したものを渡すこと。親子(レーン)構造があるため
- * 静的インポート版では子ノードの絶対座標を正しく解決できない。
+ * getNodesBounds(@xyflow/react)は、useReactFlow()経由でnodeLookupを
+ * 補って呼んでも、レーンの子ノード(parentId持ち)の絶対座標や実測サイズを
+ * 正しく拾えず幅0近くまで縮んでしまう問題があった。DOM上に実際に描画された
+ * 各ノード要素の位置を直接測って範囲を求める方が確実なため、こちらを使う。
  */
-export async function exportDiagram(getNodesBounds, nodes, format = 'png') {
-  const bounds = getNodesBounds(nodes)
+function measureNodesBounds(screenToFlowPosition) {
+  const nodeEls = document.querySelectorAll('.react-flow__node')
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  nodeEls.forEach((el) => {
+    const r = el.getBoundingClientRect()
+    if (r.width === 0 && r.height === 0) return
+    if (r.left < minX) minX = r.left
+    if (r.top < minY) minY = r.top
+    if (r.right > maxX) maxX = r.right
+    if (r.bottom > maxY) maxY = r.bottom
+  })
+  if (minX === Infinity) return { x: 0, y: 0, width: 0, height: 0 }
+  const topLeft = screenToFlowPosition({ x: minX, y: minY })
+  const bottomRight = screenToFlowPosition({ x: maxX, y: maxY })
+  return {
+    x: topLeft.x,
+    y: topLeft.y,
+    width: bottomRight.x - topLeft.x,
+    height: bottomRight.y - topLeft.y,
+  }
+}
+
+export async function exportDiagram(screenToFlowPosition, format = 'png') {
+  const bounds = measureNodesBounds(screenToFlowPosition)
   const width = Math.ceil(bounds.width + PADDING * 2)
   const height = Math.ceil(bounds.height + PADDING * 2)
   const viewportEl = document.querySelector('.react-flow__viewport')

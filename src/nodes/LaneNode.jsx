@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { NodeResizeControl } from '@xyflow/react'
 import { useFlowStore } from '../store/useFlowStore'
 import { LANE_HEADER } from './nodeDimensions'
@@ -12,16 +13,55 @@ export default function LaneNode({ id, data }) {
   const actor = useFlowStore((s) => s.actors.find((a) => a.id === data.actorId))
   const setActorLaneSize = useFlowStore((s) => s.setActorLaneSize)
   const setFlowLength = useFlowStore((s) => s.setFlowLength)
+  const startLaneSizeRef = useRef(null)
+  const startFlowLengthRef = useRef(null)
   if (!actor) return null
 
   const isLR = direction === 'LR'
+
+  // リサイズ中はドラッグの1px移動ごとにonResizeが発火するため、そのたびに
+  // undo履歴を積まず、ドラッグ中は記録を一時停止して見た目だけ更新する。
+  // 指を離した瞬間、一旦リサイズ開始時点の値へ(一時停止中のまま)静かに戻してから
+  // 記録を再開して最終値をセットすることで、undo履歴には
+  // 「開始前の値→最終値」という正しい1件だけが記録されるようにしている
+  // (React 18のバッチ処理により、この2段階の書き戻しは画面のちらつきなしで行われる)。
+  function handleResizeStart() {
+    startLaneSizeRef.current = actor.laneSize ?? null
+    useFlowStore.temporal.getState().pause()
+  }
 
   function handleResize(_event, { width, height }) {
     setActorLaneSize(actor.id, isLR ? height : width)
   }
 
+  function handleResizeEnd(_event, { width, height }) {
+    const finalSize = isLR ? height : width
+    setActorLaneSize(actor.id, startLaneSizeRef.current)
+    // React Flow自身がリサイズ確定時にonNodesChangeで寸法を反映する処理を
+    // 内部で走らせるため、それが終わるのを待ってから再開・確定する
+    // （同期的に再開すると、その内部更新まで余分な履歴として記録されてしまう）。
+    setTimeout(() => {
+      useFlowStore.temporal.getState().resume()
+      setActorLaneSize(actor.id, finalSize)
+    }, 0)
+  }
+
+  function handleFlowResizeStart() {
+    startFlowLengthRef.current = useFlowStore.getState().flowLength ?? null
+    useFlowStore.temporal.getState().pause()
+  }
+
   function handleFlowResize(_event, { width, height }) {
     setFlowLength(isLR ? width : height)
+  }
+
+  function handleFlowResizeEnd(_event, { width, height }) {
+    const finalSize = isLR ? width : height
+    setFlowLength(startFlowLengthRef.current)
+    setTimeout(() => {
+      useFlowStore.temporal.getState().resume()
+      setFlowLength(finalSize)
+    }, 0)
   }
 
   return (
@@ -41,7 +81,9 @@ export default function LaneNode({ id, data }) {
         variant="line"
         minWidth={MIN_LANE_CROSS_SIZE}
         minHeight={MIN_LANE_CROSS_SIZE}
+        onResizeStart={handleResizeStart}
         onResize={handleResize}
+        onResizeEnd={handleResizeEnd}
         className="group/resize !border-0 flex items-center justify-center !bg-transparent"
         style={
           isLR
@@ -69,7 +111,9 @@ export default function LaneNode({ id, data }) {
         variant="line"
         minWidth={MIN_LANE_CROSS_SIZE}
         minHeight={MIN_LANE_CROSS_SIZE}
+        onResizeStart={handleFlowResizeStart}
         onResize={handleFlowResize}
+        onResizeEnd={handleFlowResizeEnd}
         className="group/resize-flow !border-0 flex items-center justify-center !bg-transparent"
         style={
           isLR
