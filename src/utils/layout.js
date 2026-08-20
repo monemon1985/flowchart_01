@@ -36,6 +36,29 @@ function runDagre(contentNodes, edges, direction) {
 }
 
 /**
+ * レーンが中身より小さくリサイズされた場合に、各コンテンツノードの
+ * 交差軸方向の位置を、確定したレーン矩形に収まるようクランプする（押し込む）。
+ * クランプが不要なノードは同一参照のまま返す。
+ */
+function clampContentToLaneRects(contentNodes, laneRects, isLR) {
+  return contentNodes.map((n) => {
+    const rect = laneRects[n.data?.actorId]
+    if (!rect) return n
+    const { width, height } = dimsOf(n)
+    if (isLR) {
+      const min = LANE_HEADER
+      const max = Math.max(min, rect.height - LANE_PADDING - height)
+      const y = Math.min(Math.max(n.position.y, min), max)
+      return y === n.position.y ? n : { ...n, position: { ...n.position, y } }
+    }
+    const min = LANE_PADDING
+    const max = Math.max(min, rect.width - LANE_PADDING - width)
+    const x = Math.min(Math.max(n.position.x, min), max)
+    return x === n.position.x ? n : { ...n, position: { ...n.position, x } }
+  })
+}
+
+/**
  * レーン矩形群から、各グループのメンバーレーンを包む枠ノードを合成する。
  * ラベル用の帯(GroupFrameNode側で描画)を置くスペースとして、
  * レーンヘッダーと同じ辺(LRなら左、TBなら上)だけ余白を広めに取る。
@@ -71,7 +94,7 @@ function buildGroupFrameNodes(laneRects, groups, direction) {
  * 3) レーン(帯)は actor の並び順で直交方向に積み、フロー方向の長さは全レーン共通にする
  * 4) グループが指定されていれば、そのメンバーレーンを包む枠ノード(groupFrame)を合成する
  */
-export function autoLayout({ nodes, edges, actors, direction, groups = [], flowLength = null }) {
+export function autoLayout({ nodes, edges, actors, direction, groups = [], flowLength = null, laneGap = LANE_GAP }) {
   const laneNodes = nodes.filter((n) => n.type === 'lane')
   // groupFrame は毎回このレイアウト計算から作り直す合成ノードなので、
   // 通常のコンテンツノードとして dagre 配置対象に混ぜてはいけない。
@@ -82,7 +105,7 @@ export function autoLayout({ nodes, edges, actors, direction, groups = [], flowL
   const isLR = direction === 'LR'
 
   if (contentNodes.length === 0) {
-    const laid = layoutEmptyLanes(laneNodes, actors, direction, groups, flowLength)
+    const laid = layoutEmptyLanes(laneNodes, actors, direction, groups, flowLength, laneGap)
     return { nodes: [...laid, ...noteNodes], edges }
   }
 
@@ -128,10 +151,10 @@ export function autoLayout({ nodes, edges, actors, direction, groups = [], flowL
   const minLaneFlowLength = maxFlowExtent + LANE_PADDING * 2
   const laneFlowLength = Math.max(flowLength ?? minLaneFlowLength, minLaneFlowLength)
 
-  // 各レーンが「中身が必要とする最小の交差軸長さ」を先に計算する（下限として使う）。
-  // 起動時のデフォルトは全レーンで一律の幅にする（その中の最大値を採用）。
-  // actor.laneSize が手動リサイズで設定されていればそちらを優先しつつ、
-  // 中身が入りきらないほど小さくはできないよう下限でガードする。
+  // 各レーンが「中身が必要とする最小の交差軸長さ」を計算する。これは
+  // laneSize未設定時のデフォルト(uniformCrossLength、起動時の一律幅)にのみ使い、
+  // ユーザーが手動でlaneSizeを設定した場合はこの値で下限クランプはしない
+  // （中身が入りきらなくなったらノード側をレーン枠内にクランプして押し込む＝下のclampContentToLaneRects）。
   const minLaneCrossLengthByActor = {}
   actors.forEach((actor) => {
     const contentCrossSize = crossSizeByActor[actor.id] || NODE_DIMENSIONS.action.height
@@ -147,13 +170,13 @@ export function autoLayout({ nodes, edges, actors, direction, groups = [], flowL
   let crossCursor = 0
   const laneRects = {}
   actors.forEach((actor) => {
-    const laneCrossLength = Math.max(actor.laneSize ?? uniformCrossLength, minLaneCrossLengthByActor[actor.id])
+    const laneCrossLength = actor.laneSize ?? uniformCrossLength
 
     laneRects[actor.id] = isLR
       ? { x: 0, y: crossCursor, width: laneFlowLength, height: laneCrossLength }
       : { x: crossCursor, y: 0, width: laneCrossLength, height: laneFlowLength }
 
-    crossCursor += laneCrossLength + LANE_GAP
+    crossCursor += laneCrossLength + laneGap
   })
 
   const newLaneNodes = actors.map((actor) => {
@@ -187,10 +210,11 @@ export function autoLayout({ nodes, edges, actors, direction, groups = [], flowL
     }
   })
 
+  const clampedContentNodes = clampContentToLaneRects(newContentNodes, laneRects, isLR)
   const groupFrameNodes = buildGroupFrameNodes(laneRects, groups, direction)
 
   return {
-    nodes: [...groupFrameNodes, ...newLaneNodes, ...newContentNodes, ...noteNodes],
+    nodes: [...groupFrameNodes, ...newLaneNodes, ...clampedContentNodes, ...noteNodes],
     edges,
   }
 }
@@ -201,14 +225,14 @@ export function autoLayout({ nodes, edges, actors, direction, groups = [], flowL
  * （手動で動かしたノードの配置が、レーンをリサイズしただけで消えてしまうのを防ぐため）。
  * 中身の必要最小サイズは、既存のノード位置(レーン原点からの相対座標)から逆算する。
  */
-export function resizeLanes({ nodes, actors, direction, groups = [], flowLength = null }) {
+export function resizeLanes({ nodes, actors, direction, groups = [], flowLength = null, laneGap = LANE_GAP }) {
   const laneNodes = nodes.filter((n) => n.type === 'lane')
   const noteNodes = nodes.filter((n) => n.type === 'note')
   const contentNodes = nodes.filter((n) => n.type !== 'lane' && n.type !== 'groupFrame' && n.type !== 'note')
   const isLR = direction === 'LR'
 
   if (contentNodes.length === 0) {
-    return [...layoutEmptyLanes(laneNodes, actors, direction, groups, flowLength), ...noteNodes]
+    return [...layoutEmptyLanes(laneNodes, actors, direction, groups, flowLength, laneGap), ...noteNodes]
   }
 
   let maxFlowFootprint = 0
@@ -243,11 +267,11 @@ export function resizeLanes({ nodes, actors, direction, groups = [], flowLength 
   let crossCursor = 0
   const laneRects = {}
   actors.forEach((actor) => {
-    const laneCrossLength = Math.max(actor.laneSize ?? uniformCrossLength, minLaneCrossLengthByActor[actor.id])
+    const laneCrossLength = actor.laneSize ?? uniformCrossLength
     laneRects[actor.id] = isLR
       ? { x: 0, y: crossCursor, width: laneFlowLength, height: laneCrossLength }
       : { x: crossCursor, y: 0, width: laneCrossLength, height: laneFlowLength }
-    crossCursor += laneCrossLength + LANE_GAP
+    crossCursor += laneCrossLength + laneGap
   })
 
   const newLaneNodes = actors.map((actor) => {
@@ -265,12 +289,13 @@ export function resizeLanes({ nodes, actors, direction, groups = [], flowLength 
     }
   })
 
+  const clampedContentNodes = clampContentToLaneRects(contentNodes, laneRects, isLR)
   const groupFrameNodes = buildGroupFrameNodes(laneRects, groups, direction)
 
-  return [...groupFrameNodes, ...newLaneNodes, ...contentNodes, ...noteNodes]
+  return [...groupFrameNodes, ...newLaneNodes, ...clampedContentNodes, ...noteNodes]
 }
 
-function layoutEmptyLanes(laneNodes, actors, direction, groups = [], flowLength = null) {
+function layoutEmptyLanes(laneNodes, actors, direction, groups = [], flowLength = null, laneGap = LANE_GAP) {
   const isLR = direction === 'LR'
   const minLaneCrossLength = LANE_HEADER + NODE_DIMENSIONS.action.height + LANE_PADDING
   const laneFlowLength = Math.max(flowLength ?? 640, 640)
@@ -283,7 +308,7 @@ function layoutEmptyLanes(laneNodes, actors, direction, groups = [], flowLength 
       ? { x: 0, y: crossCursor, width: laneFlowLength, height: laneCrossLength }
       : { x: crossCursor, y: 0, width: laneCrossLength, height: laneFlowLength }
     laneRects[actor.id] = rect
-    crossCursor += laneCrossLength + LANE_GAP
+    crossCursor += laneCrossLength + laneGap
     return {
       id: existing?.id ?? `lane-${actor.id}`,
       type: 'lane',

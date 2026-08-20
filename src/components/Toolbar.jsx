@@ -10,6 +10,8 @@ export default function Toolbar({ onOpenTemplates, onOpenGallery, onOpenNodePale
   const direction = useFlowStore((s) => s.direction)
   const setDirection = useFlowStore((s) => s.setDirection)
   const runAutoLayout = useFlowStore((s) => s.autoLayout)
+  const laneGap = useFlowStore((s) => s.laneGap)
+  const setLaneGap = useFlowStore((s) => s.setLaneGap)
   const loadState = useFlowStore((s) => s.loadState)
   const undo = useTemporalStore((s) => s.undo)
   const redo = useTemporalStore((s) => s.redo)
@@ -99,6 +101,21 @@ export default function Toolbar({ onOpenTemplates, onOpenGallery, onOpenNodePale
       <button type="button" onClick={runAutoLayout} className="toolbar-btn">
         自動整列
       </button>
+
+      <label className="shrink-0 flex items-center gap-1 text-xs text-slate-600">
+        レーン間隔
+        <input
+          type="number"
+          min={0}
+          max={100}
+          value={laneGap}
+          onChange={(e) => {
+            const v = Number(e.target.value)
+            if (!Number.isNaN(v)) setLaneGap(Math.min(100, Math.max(0, v)))
+          }}
+          className="w-14 border border-slate-300 rounded px-1.5 py-1"
+        />
+      </label>
 
       <div className="w-px h-5 bg-slate-200 mx-1 shrink-0" />
 

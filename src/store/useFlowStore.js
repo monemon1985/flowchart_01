@@ -3,7 +3,7 @@ import { temporal } from 'zundo'
 import { applyNodeChanges, applyEdgeChanges, addEdge as addEdgeToList, MarkerType } from '@xyflow/react'
 import { nanoid } from '../utils/nanoid'
 import { ACTOR_COLORS, MAX_ACTORS } from './actorColors'
-import { NOTE_DIMENSIONS } from '../nodes/nodeDimensions'
+import { NOTE_DIMENSIONS, LANE_GAP } from '../nodes/nodeDimensions'
 import { autoLayout, resizeLanes } from '../utils/layout'
 import { DEFAULT_STROKE_WIDTH } from '../edges/strokeWidthPresets'
 import { useGalleryStore } from './useGalleryStore'
@@ -25,6 +25,7 @@ function stripVisualState(state) {
     actors: state.actors,
     groups: state.groups,
     flowLength: state.flowLength,
+    laneGap: state.laneGap,
     nodes: (state.nodes ?? []).map(strip),
     edges: (state.edges ?? []).map(strip),
   })
@@ -47,6 +48,7 @@ function emptyState() {
     nodes: [],
     edges: [],
     flowLength: null,
+    laneGap: LANE_GAP,
   }
 }
 
@@ -63,16 +65,26 @@ function loadFromStorage() {
 }
 
 function persist(state) {
-  const { version, direction, actors, groups, nodes, edges, flowLength } = state
+  const { version, direction, actors, groups, nodes, edges, flowLength, laneGap } = state
   localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ version, direction, actors, groups, nodes, edges, flowLength: flowLength ?? null }),
+    JSON.stringify({
+      version,
+      direction,
+      actors,
+      groups,
+      nodes,
+      edges,
+      flowLength: flowLength ?? null,
+      laneGap: laneGap ?? LANE_GAP,
+    }),
   )
 }
 
 const initial = loadFromStorage() ?? emptyState()
 if (!initial.groups) initial.groups = []
 if (initial.flowLength === undefined) initial.flowLength = null
+if (initial.laneGap === undefined || initial.laneGap === null) initial.laneGap = LANE_GAP
 
 export const useFlowStore = create(
   temporal(
@@ -229,6 +241,12 @@ export const useFlowStore = create(
       /** 全レーン共通のフロー方向の長さを手動で上書きする(setActorLaneSizeと同じ理由でresizeLanesを使う) */
       setFlowLength(size) {
         set((state) => ({ flowLength: size, nodes: resizeLanes({ ...state, flowLength: size }) }))
+        persist(get())
+      },
+
+      /** レーンとレーンの間の間隔を設定する */
+      setLaneGap(laneGap) {
+        set((state) => ({ laneGap, nodes: resizeLanes({ ...state, laneGap }) }))
         persist(get())
       },
 
@@ -404,6 +422,7 @@ export const useFlowStore = create(
           nodes: newState.nodes ?? [],
           edges: newState.edges ?? [],
           flowLength: newState.flowLength ?? null,
+          laneGap: newState.laneGap ?? LANE_GAP,
         })
         persist(get())
       },
@@ -425,6 +444,7 @@ export const useFlowStore = create(
           nodes: template.nodes,
           edges: template.edges,
           flowLength: null,
+          laneGap: LANE_GAP,
         })
         get().autoLayout()
       },
@@ -436,6 +456,7 @@ export const useFlowStore = create(
         actors: state.actors,
         groups: state.groups,
         flowLength: state.flowLength,
+        laneGap: state.laneGap,
         nodes: state.nodes,
         edges: state.edges,
       }),
