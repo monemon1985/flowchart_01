@@ -11,12 +11,17 @@ export default function LaneNode({ id, data }) {
   const direction = useFlowStore((s) => s.direction)
   const actor = useFlowStore((s) => s.actors.find((a) => a.id === data.actorId))
   const setActorLaneSize = useFlowStore((s) => s.setActorLaneSize)
+  const setFlowLength = useFlowStore((s) => s.setFlowLength)
   if (!actor) return null
 
   const isLR = direction === 'LR'
 
   function handleResize(_event, { width, height }) {
     setActorLaneSize(actor.id, isLR ? height : width)
+  }
+
+  function handleFlowResize(_event, { width, height }) {
+    setFlowLength(isLR ? width : height)
   }
 
   return (
@@ -53,6 +58,35 @@ export default function LaneNode({ id, data }) {
           }}
         />
       </NodeResizeControl>
+
+      {/*
+        レーンの長さ(フロー方向)をドラッグでリサイズできるハンドル。
+        横フローなら右辺、縦フローなら下辺。全レーン共通の長さを更新する。
+      */}
+      <NodeResizeControl
+        nodeId={id}
+        position={isLR ? 'right' : 'bottom'}
+        variant="line"
+        minWidth={MIN_LANE_CROSS_SIZE}
+        minHeight={MIN_LANE_CROSS_SIZE}
+        onResize={handleFlowResize}
+        className="group/resize-flow !border-0 flex items-center justify-center !bg-transparent"
+        style={
+          isLR
+            ? { width: HIT_AREA, marginLeft: -HIT_AREA / 2, pointerEvents: 'auto' }
+            : { height: HIT_AREA, marginTop: -HIT_AREA / 2, pointerEvents: 'auto' }
+        }
+      >
+        <div
+          className="pointer-events-none rounded-full opacity-70 group-hover/resize-flow:opacity-100 shadow-sm transition-opacity"
+          style={{
+            background: actor.color.border,
+            width: isLR ? GRIP_THICKNESS : GRIP_LENGTH,
+            height: isLR ? GRIP_LENGTH : GRIP_THICKNESS,
+          }}
+        />
+      </NodeResizeControl>
+
       <div
         className={`absolute flex items-center justify-center font-semibold text-sm ${
           isLR ? 'left-0 top-0 h-full rounded-l-md' : 'top-0 left-0 w-full rounded-t-md'

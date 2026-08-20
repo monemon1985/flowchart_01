@@ -10,6 +10,7 @@ import DecisionNode from '../nodes/DecisionNode'
 import TerminatorNode from '../nodes/TerminatorNode'
 import LaneNode from '../nodes/LaneNode'
 import GroupFrameNode from '../nodes/GroupFrameNode'
+import NoteNode from '../nodes/NoteNode'
 import LabeledEdge from '../edges/LabeledEdge'
 
 function isEditableTarget(el) {
@@ -22,6 +23,7 @@ const nodeTypes = {
   terminator: TerminatorNode,
   lane: LaneNode,
   groupFrame: GroupFrameNode,
+  note: NoteNode,
 }
 
 const edgeTypes = {
@@ -40,6 +42,7 @@ export default function FlowEditor() {
   const onConnectAction = useFlowStore((s) => s.onConnect)
   const replaceEdges = useFlowStore((s) => s.replaceEdges)
   const addNode = useFlowStore((s) => s.addNode)
+  const addNote = useFlowStore((s) => s.addNote)
   const newEdgeArrowStart = useUiPrefsStore((s) => s.newEdgeArrowStart)
   const newEdgeArrowEnd = useUiPrefsStore((s) => s.newEdgeArrowEnd)
   const newEdgeStrokeWidth = useUiPrefsStore((s) => s.newEdgeStrokeWidth)
@@ -73,6 +76,13 @@ export default function FlowEditor() {
       if (!shape) return
 
       const point = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+
+      // 付箋はレーンに紐づかない自由配置なので、ドロップ位置にそのまま置く。
+      if (shape === 'note') {
+        addNote({ x: point.x - 80, y: point.y - 60 })
+        return
+      }
+
       const laneNode = findLaneAt(nodes, point)
       if (!laneNode) return
 
@@ -81,7 +91,7 @@ export default function FlowEditor() {
         y: point.y - laneNode.position.y,
       })
     },
-    [nodes, addNode, screenToFlowPosition],
+    [nodes, addNode, addNote, screenToFlowPosition],
   )
 
   const pasteClipboard = useFlowStore((s) => s.pasteClipboard)

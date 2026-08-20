@@ -3,6 +3,7 @@ import { temporal } from 'zundo'
 import { applyNodeChanges, applyEdgeChanges, addEdge as addEdgeToList, MarkerType } from '@xyflow/react'
 import { nanoid } from '../utils/nanoid'
 import { ACTOR_COLORS, MAX_ACTORS } from './actorColors'
+import { NOTE_DIMENSIONS } from '../nodes/nodeDimensions'
 import { autoLayout } from '../utils/layout'
 import { DEFAULT_STROKE_WIDTH } from '../edges/strokeWidthPresets'
 import { useGalleryStore } from './useGalleryStore'
@@ -23,6 +24,7 @@ function stripVisualState(state) {
     direction: state.direction,
     actors: state.actors,
     groups: state.groups,
+    flowLength: state.flowLength,
     nodes: (state.nodes ?? []).map(strip),
     edges: (state.edges ?? []).map(strip),
   })
@@ -44,6 +46,7 @@ function emptyState() {
     groups: [],
     nodes: [],
     edges: [],
+    flowLength: null,
   }
 }
 
@@ -60,15 +63,16 @@ function loadFromStorage() {
 }
 
 function persist(state) {
-  const { version, direction, actors, groups, nodes, edges } = state
+  const { version, direction, actors, groups, nodes, edges, flowLength } = state
   localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ version, direction, actors, groups, nodes, edges }),
+    JSON.stringify({ version, direction, actors, groups, nodes, edges, flowLength: flowLength ?? null }),
   )
 }
 
 const initial = loadFromStorage() ?? emptyState()
 if (!initial.groups) initial.groups = []
+if (initial.flowLength === undefined) initial.flowLength = null
 
 export const useFlowStore = create(
   temporal(
@@ -208,6 +212,12 @@ export const useFlowStore = create(
         get().autoLayout()
       },
 
+      /** 全レーン共通のフロー方向の長さを手動で上書きする */
+      setFlowLength(size) {
+        set({ flowLength: size })
+        get().autoLayout()
+      },
+
       removeActor(actorId) {
         set((state) => ({
           actors: state.actors.filter((a) => a.id !== actorId),
@@ -288,6 +298,38 @@ export const useFlowStore = create(
         persist(get())
       },
 
+      /** 付箋(コメント)を追加する。役割者・レーンに紐づかず、絶対座標にそのまま配置する */
+      addNote(position) {
+        const state = get()
+        const id = nanoid()
+        const node = {
+          id,
+          type: 'note',
+          position,
+          style: { width: NOTE_DIMENSIONS.width, height: NOTE_DIMENSIONS.height },
+          data: { label: '', textColor: null },
+        }
+        set({ nodes: [...state.nodes, node] })
+        persist(get())
+        return id
+      },
+
+      updateNoteSize(nodeId, { width, height }) {
+        set((state) => ({
+          nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, style: { ...n.style, width, height } } : n)),
+        }))
+        persist(get())
+      },
+
+      updateNoteColor(nodeId, textColor) {
+        set((state) => ({
+          nodes: state.nodes.map((n) =>
+            n.id === nodeId ? { ...n, data: { ...n.data, textColor } } : n,
+          ),
+        }))
+        persist(get())
+      },
+
       removeNode(nodeId) {
         set((state) => ({
           nodes: state.nodes.filter((n) => n.id !== nodeId),
@@ -347,6 +389,7 @@ export const useFlowStore = create(
           groups: newState.groups ?? [],
           nodes: newState.nodes ?? [],
           edges: newState.edges ?? [],
+          flowLength: newState.flowLength ?? null,
         })
         persist(get())
       },
@@ -367,6 +410,7 @@ export const useFlowStore = create(
           groups: template.groups ?? [],
           nodes: template.nodes,
           edges: template.edges,
+          flowLength: null,
         })
         get().autoLayout()
       },
@@ -377,6 +421,7 @@ export const useFlowStore = create(
         direction: state.direction,
         actors: state.actors,
         groups: state.groups,
+        flowLength: state.flowLength,
         nodes: state.nodes,
         edges: state.edges,
       }),

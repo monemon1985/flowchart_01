@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useReactFlow } from '@xyflow/react'
 import { useUiPrefsStore, setNewEdgeArrowStyle, setNewEdgeStrokeWidth } from '../store/useUiPrefsStore'
 import { useFlowStore } from '../store/useFlowStore'
 import { STROKE_WIDTH_PRESETS } from '../edges/strokeWidthPresets'
@@ -15,7 +16,21 @@ export default function NodePalette({ onClose }) {
   const strokeWidth = useUiPrefsStore((s) => s.newEdgeStrokeWidth)
   const actors = useFlowStore((s) => s.actors)
   const addNode = useFlowStore((s) => s.addNode)
+  const addNote = useFlowStore((s) => s.addNote)
+  const { screenToFlowPosition } = useReactFlow()
   const [pendingShape, setPendingShape] = useState(null)
+
+  // 付箋(コメント)はレーンに紐づかないので、役割者選択なしで画面中央付近にそのまま置く。
+  function onTapAddNote() {
+    const point = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+    addNote({ x: point.x - 80, y: point.y - 60 })
+  }
+
+  function onNoteDragStart(e) {
+    e.dataTransfer.setData('application/flowchart-shape', 'note')
+    e.dataTransfer.effectAllowed = 'move'
+    onClose?.()
+  }
 
   function onDragStart(e, shape) {
     e.dataTransfer.setData('application/flowchart-shape', shape)
@@ -81,6 +96,16 @@ export default function NodePalette({ onClose }) {
           )}
         </div>
       ))}
+
+      <div
+        draggable
+        onDragStart={onNoteDragStart}
+        onClick={onTapAddNote}
+        className="flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing"
+      >
+        <div className="w-20 h-12 flex items-center justify-center rounded shadow-sm" style={{ background: '#fef9c3', border: '1px solid #eab308' }} />
+        <span className="text-xs text-slate-600">コメント</span>
+      </div>
 
       <div className="border-t border-slate-200 pt-3">
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">

@@ -54,10 +54,15 @@ export default function LabeledEdge({
 
   if (!sourceNode || !targetNode) return null
 
-  // 同じsourceから出るエッジが2本以上ある場合は「幹が1本にまとまって見える」
-  // 分岐専用のパスを使う（src/utils/edgeGeometry.js の getBranchEdgeParams 参照）。
-  const siblingCount = allEdges.filter((e) => e.source === source).length
-  const isBranch = siblingCount >= 2
+  // 同じsourceから「フロー方向の辺(自然な分岐の向き)」で出るエッジが2本以上ある場合は
+  // 「幹が1本にまとまって見える」分岐専用のパスを使う（getBranchEdgeParams参照）。
+  // 左右上下など明示的に別のハンドルを選んだエッジは、幹の出口(フロー方向固定)と
+  // 実際のターゲット方向が食い違い経路が壊れて見えるため、分岐の対象から外し
+  // 常に個別のgetEdgeParams(ハンドル指定があればそれを尊重)で描画する。
+  const naturalSide = direction === 'LR' ? 'right' : 'bottom'
+  const isNaturalSide = (handleId) => !handleId || handleId === naturalSide
+  const branchSiblingCount = allEdges.filter((e) => e.source === source && isNaturalSide(e.sourceHandle)).length
+  const isBranch = branchSiblingCount >= 2 && isNaturalSide(sourceHandleId)
 
   let edgePath, labelX, labelY
 

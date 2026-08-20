@@ -4,6 +4,9 @@ export const NODE_DIMENSIONS = {
   decision: { width: 170, height: 110 },
 }
 
+export const NOTE_DIMENSIONS = { width: 160, height: 120 }
+export const NOTE_MIN_SIZE = 100
+
 export const LANE_HEADER = 56
 export const LANE_PADDING = 28
 export const LANE_GAP = 16
